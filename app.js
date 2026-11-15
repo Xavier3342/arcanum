@@ -73,7 +73,7 @@ const ico=(name,cls='')=>`<svg class="${cls}" viewBox="0 0 24 24" width="18" hei
 const esc=v=>String(v??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
 const uid=()=>('c'+Date.now().toString(36)+Math.random().toString(36).slice(2,8));
 const clamp=(x,min,max)=>Math.max(min,Math.min(max,x));
-function fresh(name='Unnamed Wizard') {return {id:uid(),name,pronouns:'',player:'',level:2,stats:{STR:-1,DEX:1,INT:2,WIS:0,CHA:0},hp:7,hpBonus:0,armorBonus:0,xp:0,conditions:{Angry:'clear',Distracted:'clear',Exhausted:'clear',Frightened:'clear',Insecure:'clear'},origins:{ancestry:'',community:'',background:'',look:'',portrait:''},relationships:[],prepared:['Abjuration','Conjuration','Evocation'],forgotten:[],paths:['Illusionist'],moves:[],focus:'skull',equipment:['gear','potion'],used:{gear:0,books:0,potion:0,provisions:0,grimoire:0},wealth:'Modest',treasure:0,spells:STARTER_SPELLS.map(x=>({...x,id:uid(),example:true})),notes:'',sessionNotes:'',advancements:[],createdAt:Date.now(),updatedAt:Date.now()};}
+function fresh(name='Unnamed Wizard') {return {id:uid(),name,pronouns:'',player:'',level:2,stats:{STR:-1,DEX:1,INT:2,WIS:0,CHA:0},hp:7,hpBonus:0,armorBonus:0,xp:0,conditions:{Angry:'clear',Distracted:'clear',Exhausted:'clear',Frightened:'clear',Insecure:'clear'},origins:{ancestry:'',community:'',background:'',look:'',portrait:''},relationships:[],prepared:['Abjuration','Conjuration','Evocation'],forgotten:[],paths:['Illusionist'],moves:[],focus:'skull',equipment:['gear','potion'],used:{gear:0,books:0,potion:0,provisions:0,grimoire:0},wealth:'Modest',treasure:0,spells:STARTER_SPELLS.map(x=>({...x,id:uid(),example:true})),notes:'',inventory:[],journalEntries:[],backstory:{},sessionNotes:'',advancements:[],createdAt:Date.now(),updatedAt:Date.now()};}
 let volatile=false;
 let db;
 try{const raw=localStorage.getItem(STORAGE);db=raw?JSON.parse(raw):{version:1,activeId:null,characters:[],theme:'dark'};if(!db||!Array.isArray(db.characters))throw Error('Invalid backup');}catch(e){db={version:1,activeId:null,characters:[],theme:'dark'};volatile=true;}
@@ -103,12 +103,70 @@ const field=(label,path,v,placeholder='',type='text')=>`<label class="input-wrap
 const select=(label,path,val,options)=>`<label class="input-wrap"><span class="field-label">${label}</span><select data-bind="${path}">${options.map(o=>{const value=typeof o==='object'?o.id:o,label=typeof o==='object'?o.name:o;return `<option value="${esc(value)}" ${val===value?'selected':''}>${esc(label)}</option>`}).join('')}</select></label>`;
 const pill=(label,type='')=>`<span class="pill ${type}">${esc(label)}</span>`;
 const infoCard=(title,body)=>`<section class="card"><div class="card-title"><h2>${title}</h2></div>${body}</section>`;
+
+const storyFields = [
+  ['history', 'Personal history', 'Where did you come from?'],
+  ['goals', 'Goals & motivations', 'What do you want, and why?'],
+  ['events', 'Defining events', 'What moments shaped you?']
+];
+
+function backstoryCard(c) {
+  return infoCard('Character backstory', `<div class="block-stack">${storyFields.map(([key, label, prompt]) =>
+    `<label><span class="field-label">${label}</span><textarea data-bind="backstory.${key}" placeholder="${prompt}">${esc(c.backstory?.[key] || '')}</textarea></label>`
+  ).join('')}</div>`);
+}
+
+function recordCard(c, key) {
+  const inventory = key === 'inventory';
+  const rows = (c[key] || []).map(record => {
+    const summary = inventory ? `Qty ${record.quantity}${record.location ? ' · ' + record.location : ''}` : record.date;
+    return `<div class="group-item"><div class="record-content"><strong>${esc(record.name)}</strong>
+      <div class="micro muted">${esc(summary)}</div><div class="small record-details">${esc(record.details)}</div></div>
+      <button class="btn tiny" data-action="record-edit" data-key="${key}" data-id="${esc(record.id)}" aria-label="Edit ${esc(record.name)}">Edit</button></div>`;
+  }).join('');
+  const earlier = !inventory && c.notes
+    ? `<details><summary>Earlier campaign notes</summary><label><span class="field-label">Notes</span><textarea data-bind="notes">${esc(c.notes)}</textarea></label></details>`
+    : '';
+  return infoCard(inventory ? 'Carried inventory' : 'Campaign journal', `<div class="block-stack">${earlier}
+    <div class="group-list">${rows || `<div class="empty">${inventory ? 'No carried items yet' : 'No journal entries yet'}</div>`}</div>
+    <div><button class="btn" data-action="record-edit" data-key="${key}">${ico('plus')} Add ${inventory ? 'item' : 'entry'}</button></div></div>`);
+}
+
+function openRecord(key, id) {
+  const inventory = key === 'inventory';
+  const noun = inventory ? 'item' : 'entry';
+  const record = (current()[key] || []).find(entry => entry.id === id);
+  modal(`${record ? 'Edit' : 'Add'} ${noun}`, `<form id="character-record-form" data-key="${key}" data-id="${esc(record?.id || '')}">
+    <div class="field-grid"><label class="full"><span class="field-label">${inventory ? 'Item name' : 'Entry title'}</span>
+    <input class="input" name="name" required maxlength="120" value="${esc(record?.name || '')}"></label>
+    ${inventory ? `<label><span class="field-label">Quantity</span><input class="input" name="quantity" type="number" required min="1" max="999999" step="1" value="${record?.quantity ?? 1}"></label>
+    <label><span class="field-label">Carried where?</span><input class="input" name="location" maxlength="100" placeholder="Backpack, belt, worn…" value="${esc(record?.location || '')}"></label>`
+    : `<label><span class="field-label">Session date</span><input class="input" name="date" type="date" value="${esc(record?.date || '')}"></label>`}
+    <label class="full"><span class="field-label">${inventory ? 'Notes' : 'Entry'}</span><textarea name="details">${esc(record?.details || '')}</textarea></label></div>
+    <div class="modal-actions">${record ? `<button type="button" class="btn danger" data-action="record-delete" data-key="${key}" data-id="${esc(record.id)}">Delete</button>` : ''}
+    <button type="button" class="btn" data-action="close-modal">Cancel</button><button type="submit" class="btn primary">Save ${noun}</button></div></form>`);
+}
+
+function cleanRecord(key, record, id) {
+  const name = typeof record?.name === 'string' ? record.name.trim().slice(0, 120) : '';
+  if (!name) return null;
+  const details = typeof record.details === 'string' ? record.details : '';
+  if (key === 'inventory') {
+    const quantity = Number(record.quantity);
+    const location = typeof record.location === 'string' ? record.location.trim().slice(0, 100) : '';
+    return {id, name, details, location, quantity: Number.isInteger(quantity) && quantity >= 1 && quantity <= 999999 ? quantity : 1};
+  }
+  const date = typeof record.date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(record.date) ? record.date : '';
+  return {id, name, details, date};
+}
+
 function renderSheet(){const c=current(),mx=maxHp(c),count=conditionCount(c),stats=CONDITIONS.reduce((a,x)=>(a[x.stat]=x.name,a),{});return pagehead('Your character','Your central character sheet. Changes save automatically on this device.',`<button class="btn hide-mobile" data-action="print">${ico('printer')} Print</button>`)+
 `<section class="card hero"><div class="hero-inner"><div class="hero-top"><button class="avatar" data-action="portrait" title="Change character portrait" aria-label="Change character portrait">${c.origins.portrait?`<img src="${esc(c.origins.portrait)}" alt="Character portrait" style="width:100%;height:100%;border-radius:inherit;object-fit:cover"/>`:'✦'}</button><div><h2 class="hero-name">${esc(c.name||'Unnamed Wizard')}</h2><div class="hero-meta">${pill(`Level ${c.level} Wizard`,'accent')}${c.paths.length?c.paths.map(p=>pill(p,'mint')).join(''):pill('No Path acquired')}${pill(`${armor(c)} Armor`)}</div></div></div><div class="hero-controls">${field('Character name','name',c.name,'Your Wizard')}${field('Pronouns','pronouns',c.pronouns,'they/them')}${field('Player name','player',c.player,'Optional')}</div>${c.level<2&&c.paths.length?'<div class="hero-sub">Rules check: Wizard Paths are normally gained through advancements after level 1.</div>':''}</div></section>`+
 `<div class="cols-2" style="margin-top:18px"><div class="block-stack">
 ${infoCard('Attributes',`<div class="stats-grid">${['STR','DEX','INT','WIS','CHA'].map(stat=>`<div class="stat"><div class="stat-name">${stat}</div><div class="stat-value"><button data-action="stat" data-stat="${stat}" data-delta="-1" aria-label="Decrease ${stat}">−</button><span>${fmtSign(c.stats[stat])}</span><button data-action="stat" data-stat="${stat}" data-delta="1" aria-label="Increase ${stat}">+</button></div>${c.conditions[stats[stat]]!=='clear'?'<div class="stat-penalty">Disadvantage</div>':'<div class="micro subtle">&nbsp;</div>'}</div>`).join('')}</div><div class="footnote" style="margin-top:11px">The level-1 starting spread is +2, +1, 0, 0, −1. Adjust values when you gain stat advancements; allocation is not enforced automatically.</div>`)}
 ${infoCard('Character background',`<div class="field-grid">${field('Ancestry','origins.ancestry',c.origins.ancestry,'Elf, dwarf, human…')}${field('Community','origins.community',c.origins.community,'Arcane academy…')}${field('Background','origins.background',c.origins.background,'Former occupation…')}<label class="input-wrap full"><span class="field-label">Appearance / look</span><textarea data-bind="origins.look" placeholder="Outfit, eyes, markings, focus, demeanor…">${esc(c.origins.look)}</textarea></label></div>`)}
 ${infoCard('Equipment & focus',`<div class="field-grid">${select('Arcane focus','focus',c.focus,FOCI)}<div><span class="field-label">Focus benefit</span><div class="alert info">${esc(FOCI.find(f=>f.id===c.focus)?.desc||'')}</div></div><div class="full"><span class="field-label">Equipment (choose two at character creation)</span><div class="group-list">${EQUIPMENT.map(e=>`<div class="group-item"><label style="display:flex;gap:10px;align-items:center;flex:1;cursor:pointer"><input type="checkbox" data-equipment="${e.id}" ${c.equipment.includes(e.id)?'checked':''}/><span><strong>${esc(e.name)}</strong><span class="micro muted" style="display:block">${esc(e.desc)}</span></span></label>${e.max&&c.equipment.includes(e.id)?`<div class="flex-row"><button class="btn tiny" data-action="use" data-item="${e.id}" data-delta="1">Use</button><span class="micro muted">${clamp(c.used[e.id]||0,0,e.max)}/${e.max}</span><button class="btn tiny" data-action="use" data-item="${e.id}" data-delta="-1">↺</button></div>`:''}</div>`).join('')}</div></div></div>`)}
+${recordCard(c, 'inventory')}
 </div><div class="block-stack">
 ${infoCard('Hit points & armor',`<div class="meter-row"><div><div class="field-label">Current HP</div><div class="meter-value">${clamp(c.hp,0,mx)} <span>/ ${mx}</span></div></div><div class="hp-ctrl"><button class="step-btn" data-action="hp" data-delta="-1" aria-label="Lose one HP">−</button><button class="step-btn" data-action="hp" data-delta="1" aria-label="Gain one HP">+</button></div></div><div class="progress"><div class="progress-fill" style="width:${clamp(c.hp/mx*100,0,100)}%"></div></div><div class="flex-spread"><span class="micro muted">Armor: <strong style="color:var(--text)">${armor(c)}</strong></span><span class="micro muted">Max HP: ${mx}</span></div><div class="field-grid" style="margin-top:15px">${field('Extra max HP modifier','hpBonus',c.hpBonus,'0','number')}${field('Extra Armor modifier','armorBonus',c.armorBonus,'0','number')}</div><div class="flex-row" style="margin-top:12px"><button class="btn" data-action="heal-full">${ico('heart')} Full heal</button><button class="btn" data-action="make-camp">${ico('refresh')} Make Camp</button></div>`)}
 ${infoCard('Conditions',`<p class="para small">Marked or locked Conditions give disadvantage on their corresponding Stat rolls.</p><div class="condition-list">${CONDITIONS.map(k=>`<div class="condition ${c.conditions[k.name]}"><div class="condition-top"><span class="condition-name">${k.name}</span>${pill(k.stat,'')}</div><div class="condition-sub">${k.desc}</div><div class="condition-actions">${['clear','marked','locked'].map(state=>`<button class="choice-btn ${c.conditions[k.name]===state?'selected':''} ${state==='locked'?'lock':''}" data-action="condition" data-condition="${k.name}" data-state="${state}">${state==='clear'?'Clear':state==='marked'?'Mark':'Lock'}</button>`).join('')}</div></div>`).join('')}</div><div style="margin-top:12px" class="flex-spread">${pill(`${count} / 5 active`,count>=4?'danger':'amber')}<button class="btn tiny" data-action="reach-limit" ${count<5?'disabled':''}>Reach Your Limit</button></div>${count>=4?'<div class="alert danger" style="margin-top:12px">You are close to reaching your limit. At five active Conditions, resolve Reach Your Limit.</div>':''}`)}
@@ -128,7 +186,8 @@ ${infoCard('Move reference',`<div class="group-list"><div class="group-item" sty
 </div><div class="block-stack">${infoCard('Quick combat tracker',`<div class="meter-row"><div><div class="field-label">Current HP</div><div class="meter-value">${c.hp}<span> / ${maxHp(c)}</span></div></div><div class="hp-ctrl"><button class="step-btn" data-action="hp" data-delta="-1">−</button><button class="step-btn" data-action="hp" data-delta="1">+</button><button class="btn" data-action="heal-full">Full heal</button></div></div><div class="separator"></div><div class="field-label">Conditions</div>${CONDITIONS.map(x=>`<div class="group-item" style="margin-top:7px"><div><strong>${x.name}</strong><div class="micro muted">${x.stat} disadvantage</div></div><div class="flex-row">${pill(c.conditions[x.name],c.conditions[x.name]==='locked'?'danger':c.conditions[x.name]==='marked'?'amber':'mint')}<button class="btn tiny" data-action="cycle-condition" data-condition="${x.name}">Change</button></div></div>`).join('')}<button class="btn btn-wide" style="margin-top:15px" data-action="make-camp">${ico('refresh')} Make Camp</button>`)}
 ${infoCard('Spellcasting checklist',`<div class="group-list"><div class="group-item">${ico('check-circle')} Arcane focus available</div><div class="group-item">${ico('check-circle')} Both hands otherwise free</div><div class="group-item">${ico('check-circle')} Able to speak aloud</div><div class="group-item">${ico('check-circle')} Verb + substance from currently available schools</div></div><p class="footnote" style="margin-top:14px">For your mobility/illusion build, remember that ranged spell attacks use Cast a Spell +INT, while a physical bow uses Trade Blows +DEX.</p>`)}
 </div></div>`;}
-function renderNotes(){const c=current();return pagehead('Journal & safekeeping','Keep campaign notes, relationships, and backups of every character you create.')+`<div class="cols-2"><div class="block-stack">${infoCard('Campaign journal',`<label><span class="field-label">Notes · auto-saved locally</span><textarea class="notes-textarea" data-bind="notes" placeholder="NPCs, clues, spell experiments, GM rulings, quest leads…">${esc(c.notes)}</textarea></label>`)}
+function renderNotes(){const c=current();return pagehead('Journal & safekeeping','Keep campaign notes, relationships, and backups of every character you create.')+`<div class="cols-2"><div class="block-stack">${backstoryCard(c)}
+${recordCard(c, 'journalEntries')}
 ${infoCard('Relationships',`<p class="para small">Record PCs, relationship descriptions, and Depth (0–3).</p><div class="group-list">${c.relationships.length?c.relationships.map((rel,i)=>`<div class="group-item"><div style="flex:1"><strong>${esc(rel.name)}</strong><div class="micro muted">${esc(rel.description)}</div><div class="micro muted">Depth: ${clamp(rel.depth||0,0,3)}</div></div><button class="icon-btn" data-action="relationship-edit" data-index="${i}" aria-label="Edit relationship">${ico('edit')}</button></div>`).join(''):'<div class="empty">No relationships yet</div>'}</div><button class="btn" style="margin-top:13px" data-action="relationship-new">${ico('plus')} Add relationship</button>`)}
 </div><div class="block-stack">${infoCard('Your characters',`<div class="group-list">${db.characters.map(x=>`<div class="character-row ${x.id===c.id?'current':''}"><div class="flex-row" style="min-width:0"><div class="char-mini">✦</div><div><strong>${esc(x.name||'Unnamed Wizard')}</strong><p>Level ${x.level} · ${x.paths.join(' + ')||'Wizard'}</p></div></div>${x.id===c.id?pill('Current','accent'):`<button class="btn tiny" data-action="character-switch" data-id="${x.id}">Open</button>`}</div>`).join('')}</div><div class="flex-row" style="margin-top:14px"><button class="btn" data-action="character-new">${ico('plus')} New</button><button class="btn" data-action="character-duplicate">${ico('copy')} Duplicate</button></div><div class="separator"></div><button class="btn danger" data-action="character-delete">${ico('delete')} Delete current character</button>`)}
 ${infoCard('Export & restore',`<div class="alert info" style="margin-bottom:17px">Your edits are saved automatically <strong>in this browser on this device</strong>. They do not sync across devices. Export a backup to keep your character safe or move it to your phone.</div><div class="group-list"><button class="btn btn-wide primary" data-action="export">${ico('download')} Export ALL characters · JSON</button><button class="btn btn-wide" data-action="import">${ico('upload')} Import a JSON backup</button><button class="btn btn-wide" data-action="export-character">${ico('download')} Export current character only</button><button class="btn btn-wide" data-action="print">${ico('printer')} Print character sheet</button></div><p class="footnote" style="margin-top:14px">Import adds characters from a saved backup without overwriting existing ones. Backups include stats, notes, spells, and portrait data. Keep a copy somewhere you control (e.g., Files, Google Drive, or another cloud folder).</p>`)}
@@ -148,13 +207,31 @@ function exportJSON(data,filename){const blob=new Blob([JSON.stringify(data,null
 function exportAll(){save();exportJSON({format:'Arcanum DW2 Wizard Keeper',version:1,exportedAt:new Date().toISOString(),characters:db.characters},'Arcanum-DW2-all-characters.json')}
 function exportChar(){save();exportJSON({format:'Arcanum DW2 Wizard Keeper',version:1,exportedAt:new Date().toISOString(),characters:[current()]},`Arcanum-${(current().name||'wizard').replace(/[^a-z0-9-]+/gi,'-')}.json`)}
 function normalizeImported(x){if(!x||typeof x!=='object'||Array.isArray(x))return null;const d=fresh(String(x.name||'Imported wizard').slice(0,120));const safe=(key,defaultVal)=>Array.isArray(x[key])?x[key]:defaultVal;
-Object.assign(d,{...x,id:uid(),name:String(x.name||'Imported wizard').slice(0,120),level:clamp(Number(x.level)||1,1,99),stats:{...d.stats,...(x.stats||{})},origins:{...d.origins,...(x.origins||{})},conditions:{...d.conditions,...(x.conditions||{})},hp:Math.max(0,Number(x.hp)||0),paths:safe('paths',[]).filter(p=>PATHS.some(q=>q.id===p)),moves:safe('moves',[]).filter(m=>PATHS.some(q=>q.moves.some(v=>v.id===m))),prepared:safe('prepared',[]).filter(p=>SCHOOLS.some(q=>q.id===p)).slice(0,3),forgotten:safe('forgotten',[]),equipment:safe('equipment',[]).filter(e=>EQUIPMENT.some(q=>q.id===e)),used:{...d.used,...(x.used||{})},spells:safe('spells',[]).slice(0,300).filter(sp=>sp&&typeof sp==='object').map(sp=>({...sp,id:uid()})),relationships:safe('relationships',[]).slice(0,40).filter(r=>r&&typeof r==='object'),createdAt:Date.now(),updatedAt:Date.now()});return d;}
+Object.assign(d,{...x,id:uid(),name:String(x.name||'Imported wizard').slice(0,120),level:clamp(Number(x.level)||1,1,99),stats:{...d.stats,...(x.stats||{})},origins:{...d.origins,...(x.origins||{})},conditions:{...d.conditions,...(x.conditions||{})},hp:Math.max(0,Number(x.hp)||0),paths:safe('paths',[]).filter(p=>PATHS.some(q=>q.id===p)),moves:safe('moves',[]).filter(m=>PATHS.some(q=>q.moves.some(v=>v.id===m))),prepared:safe('prepared',[]).filter(p=>SCHOOLS.some(q=>q.id===p)).slice(0,3),forgotten:safe('forgotten',[]),equipment:safe('equipment',[]).filter(e=>EQUIPMENT.some(q=>q.id===e)),used:{...d.used,...(x.used||{})},spells:safe('spells',[]).slice(0,300).filter(sp=>sp&&typeof sp==='object').map(sp=>({...sp,id:uid()})),relationships:safe('relationships',[]).slice(0,40).filter(r=>r&&typeof r==='object'),createdAt:Date.now(),updatedAt:Date.now()});
+  d.backstory = Object.fromEntries(storyFields.map(([key]) => [key, typeof x.backstory?.[key] === "string" ? x.backstory[key] : ""]));
+  for (const key of ["inventory", "journalEntries"]) {
+    d[key] = safe(key, []).map(record => cleanRecord(key, record, uid())).filter(Boolean);
+  }
+  return d;
+}
 function handleImport(file){if(!file)return;const reader=new FileReader();reader.onload=()=>{try{const data=JSON.parse(reader.result);if(data.format!=='Arcanum DW2 Wizard Keeper'||!Array.isArray(data.characters))throw Error('Invalid Arcanum backup');if(data.characters.length>100)throw Error('Too many characters in one backup');const imported=data.characters.map(normalizeImported).filter(Boolean);if(!imported.length)throw Error('No usable characters');db.characters.push(...imported);db.activeId=imported[0].id;screen='sheet';save();render();toast(`Imported ${imported.length} character${imported.length!==1?'s':''}. Existing characters were preserved.`)}catch(e){toast('Could not import backup: '+e.message)}};reader.readAsText(file);}
 function roll(){const c=current();const modeMap={cast:'INT',melee:'STR',ranged:'DEX',dodge:'DEX',outsmart:'INT',sneak:'DEX',wis:'WIS',cha:'CHA'};let st=modeMap[diceMode]||'INT';if(diceMode==='cast'&&diceMag!=='?'&&Number(diceMag)>c.stats.INT){toast('Spell Magnitude is above your INT. Try a lesser effect or Ritual.');return;}let sources=(diceExtra==='advantage'?1:diceExtra==='disadvantage'?-1:0);if(diceMode==='cast'&&diceMag!=='?'&&Number(diceMag)===c.stats.INT)sources--;if(CONDITIONS.some(x=>x.stat===st&&c.conditions[x.name]!=='clear'))sources--;const d=sources>0?'advantage':sources<0?'disadvantage':'normal';let dice=Array.from({length:d==='normal'?2:3},()=>Math.floor(Math.random()*6)+1);let use=dice.slice();let omitted=null;if(d!=='normal'){const keep=d==='advantage'?[...dice].sort((a,b)=>b-a).slice(0,2):[...dice].sort((a,b)=>a-b).slice(0,2);const removed=d==='advantage'?Math.min(...dice):Math.max(...dice);omitted=dice.findIndex(z=>z===removed);use=keep;}
 const total=use.reduce((a,b)=>a+b,0)+c.stats[st];diceLast={dice,omitted,mod:c.stats[st],total,outcome:total>=10?'10+ · Success':total>=7?'7–9 · Success with complication':'6− · Trouble',mode:st+(d!=='normal'?' · '+d:'')};render();}
 function changeBind(path,val){if(path==='__diceMode'){diceMode=val;diceLast=null;render();return;}const c=current(),segments=path.split('.');let cur=c;for(let i=0;i<segments.length-1;i++)cur=cur[segments[i]]||(cur[segments[i]]={});const last=segments.at(-1);if(['hpBonus','armorBonus','level','treasure'].includes(path))val=Number(val)||0;cur[last]=val;scheduleSave();if(path==='name'){document.getElementById('page-eyebrow').textContent=String(val).slice(0,24).toUpperCase();}}
 function refreshAfterChange(path){if(['level','hpBonus','armorBonus','focus','wealth','name','origins.portrait'].includes(path))render();}
 function handleAction(a){const c=current(),kind=a.dataset.action;switch(kind){
+case 'record-edit':
+  openRecord(a.dataset.key, a.dataset.id);
+  break;
+case 'record-delete': {
+  const {key, id} = a.dataset;
+  if (!confirm('Delete this ' + (key === 'inventory' ? 'item' : 'entry') + '?')) break;
+  c[key] = c[key].filter(record => record.id !== id);
+  save();
+  closeModal();
+  render();
+  break;
+}
 case 'nav':screen=a.dataset.screen;searchTerm='';render();window.scrollTo({top:0,behavior:'smooth'});break;
 case 'theme':db.theme=db.theme==='dark'?'light':'dark';save();render();break;
 case 'export':exportAll();break;
@@ -201,7 +278,22 @@ default:break;
 document.addEventListener('click',e=>{const a=e.target.closest('[data-action]');if(a){e.preventDefault();handleAction(a)}});
 document.addEventListener('change',e=>{const a=e.target;if(a.matches('[data-bind]')){changeBind(a.dataset.bind,a.value);refreshAfterChange(a.dataset.bind)}if(a.matches('[data-school]')){const c=current(),s=a.dataset.school;if(a.checked){if(c.prepared.length>=3){toast('Maximum three normal Prepared Schools. Owned Paths grant their schools separately.');render();return}c.prepared.push(s);}else c.prepared=c.prepared.filter(x=>x!==s);save();render();}if(a.matches('[data-equipment]')){const c=current(),id=a.dataset.equipment;if(a.checked){if(c.equipment.length>=2){toast('At character creation, choose two extra equipment items.');render();return}c.equipment.push(id);}else{c.equipment=c.equipment.filter(x=>x!==id);}save();render();}if(a.id==='dice-mag'){diceMag=a.value;diceLast=null;render();}if(a.id==='dice-extra'){diceExtra=a.value;diceLast=null;render();}});
 document.addEventListener('input',e=>{if(e.target.matches('[data-bind]')&&!e.target.matches('select'))changeBind(e.target.dataset.bind,e.target.value);if(e.target.id==='spell-search'){searchTerm=e.target.value;const pos=e.target.selectionStart;render();const field=document.getElementById('spell-search');if(field){field.focus();field.setSelectionRange(pos,pos);}}});
-document.addEventListener('submit',e=>{if(e.target.id==='spell-form'){e.preventDefault();const f=e.target,form=new FormData(f),c=current(),id=f.dataset.id;const sp={id:id||uid(),name:String(form.get('name')).trim().slice(0,110),verb:String(form.get('verb')),sub:String(form.get('sub')),category:String(form.get('category')),mag:String(form.get('mag')),effect:String(form.get('effect')).trim().slice(0,2000),note:String(form.get('note')).trim().slice(0,2000),example:false};if(!sp.name||!sp.effect){toast('Enter a spell name and desired effect.');return;}const i=c.spells.findIndex(x=>x.id===id);if(i>=0)c.spells[i]=sp;else c.spells.unshift(sp);save();closeModal();render();toast('Spell saved.');}else if(e.target.id==='relationship-form'){e.preventDefault();const f=e.target,d=new FormData(f),r={name:String(d.get('name')).slice(0,100),description:String(d.get('description')).slice(0,800),depth:Number(d.get('depth'))};let i=f.dataset.index===''?-1:Number(f.dataset.index);if(i<0)current().relationships.push(r);else current().relationships[i]=r;save();closeModal();render();}else if(e.target.id==='new-character-form'){e.preventDefault();const f=new FormData(e.target),c=fresh(String(f.get('name')||'New Wizard').trim().slice(0,100));if(f.get('preset')==='level1'){c.level=1;c.hp=6;c.paths=[];c.prepared=['Abjuration','Evocation','Illusion'];c.spells=STARTER_SPELLS.map(sp=>({...sp,id:uid()}));}db.characters.push(c);db.activeId=c.id;screen='sheet';save();closeModal();render();toast('New character created.');}});
+document.addEventListener('submit',e=>{
+if(e.target.id === 'character-record-form') {
+  e.preventDefault();
+  const {key, id} = e.target.dataset;
+  const record = cleanRecord(key, Object.fromEntries(new FormData(e.target)), id || uid());
+  if (!record) { toast('Enter a name or title.'); return; }
+  const records = current()[key] ||= [];
+  const index = records.findIndex(entry => entry.id === id);
+  if (index < 0) records.unshift(record);
+  else records[index] = record;
+  save();
+  closeModal();
+  render();
+  return;
+}
+if(e.target.id==='spell-form'){e.preventDefault();const f=e.target,form=new FormData(f),c=current(),id=f.dataset.id;const sp={id:id||uid(),name:String(form.get('name')).trim().slice(0,110),verb:String(form.get('verb')),sub:String(form.get('sub')),category:String(form.get('category')),mag:String(form.get('mag')),effect:String(form.get('effect')).trim().slice(0,2000),note:String(form.get('note')).trim().slice(0,2000),example:false};if(!sp.name||!sp.effect){toast('Enter a spell name and desired effect.');return;}const i=c.spells.findIndex(x=>x.id===id);if(i>=0)c.spells[i]=sp;else c.spells.unshift(sp);save();closeModal();render();toast('Spell saved.');}else if(e.target.id==='relationship-form'){e.preventDefault();const f=e.target,d=new FormData(f),r={name:String(d.get('name')).slice(0,100),description:String(d.get('description')).slice(0,800),depth:Number(d.get('depth'))};let i=f.dataset.index===''?-1:Number(f.dataset.index);if(i<0)current().relationships.push(r);else current().relationships[i]=r;save();closeModal();render();}else if(e.target.id==='new-character-form'){e.preventDefault();const f=new FormData(e.target),c=fresh(String(f.get('name')||'New Wizard').trim().slice(0,100));if(f.get('preset')==='level1'){c.level=1;c.hp=6;c.paths=[];c.prepared=['Abjuration','Evocation','Illusion'];c.spells=STARTER_SPELLS.map(sp=>({...sp,id:uid()}));}db.characters.push(c);db.activeId=c.id;screen='sheet';save();closeModal();render();toast('New character created.');}});
 document.getElementById('import-file').addEventListener('change',e=>{handleImport(e.target.files?.[0]);e.target.value='';});
 document.getElementById('modal-scrim').addEventListener('click',e=>{if(e.target.id==='modal-scrim')closeModal()});
 document.addEventListener('keydown',e=>{if(e.key==='Escape')closeModal()});
