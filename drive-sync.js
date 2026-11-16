@@ -140,6 +140,10 @@
           }),
         });
         id = created.id;
+        const visibleId = await findDocument(folderId);
+        if (visibleId && visibleId !== id) {
+          throw new Error('Another device created a sync document at the same time. Check the Arcanum documents in your Drive folder before reconnecting.');
+        }
       }
       if (!idPattern.test(id || '')) throw new Error('Google returned an invalid document ID.');
       app.setLink({id, folderId, base: null});
@@ -149,7 +153,7 @@
       const doc = await request(docs + '/' + id + '?includeTabsContent=true');
       const tab = doc.tabs?.[0];
       const content = tab?.documentTab?.body?.content;
-      if (!doc.revisionId || doc.tabs.length !== 1 || tab.childTabs?.length || !content?.length) {
+      if (!doc.revisionId || doc.tabs?.length !== 1 || tab.childTabs?.length || !content?.length) {
         throw new Error('The Arcanum sync document has an unsupported layout.');
       }
       const paragraphs = content.filter(block => !block.sectionBreak);
@@ -330,16 +334,30 @@
       try {
         const client = google.accounts.oauth2.initTokenClient({
           client_id: config.clientId, scope, include_granted_scopes: false,
-          callback: response => {
+          callback: async response => {
             busy = false;
             if (!response.access_token || !google.accounts.oauth2.hasGrantedAllScopes(response, scope)) {
               return report('Drive access was not granted. Local autosave is active.');
             }
             token = response.access_token;
             expires = Date.now() + Math.max(0, Number(response.expires_in) - 30) * 1000;
-            if (app.link()) {
+            const link = app.link();
+            if (link) {
               conflict = false;
-              sync();
+              busy = true;
+              report('Checking the Drive folder…');
+              try {
+                if (await findDocument(link.folderId) !== link.id) {
+                  throw new Error('The linked save has moved or is unavailable. Disconnect and select its folder again.');
+                }
+              } catch (error) {
+                token = '';
+                return report(error.message);
+              } finally {
+                busy = false;
+                app.showStatus();
+              }
+              await sync();
             }
             else {
               report('Select your DND folder in Google Drive.');
