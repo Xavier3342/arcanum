@@ -80,8 +80,44 @@ try{const raw=localStorage.getItem(STORAGE);db=raw?JSON.parse(raw):{version:1,ac
 if(!db.characters.length){const c=fresh();db.characters.push(c);db.activeId=c.id;}
 if(!db.characters.some(c=>c.id===db.activeId))db.activeId=db.characters[0].id;
 let screen='sheet',magicFilter='All',diceMode='cast',diceMag='0',diceExtra='normal',diceLast=null,toastTimer,saveTimer,searchTerm='';
-const current=()=>db.characters.find(c=>c.id===db.activeId)||db.characters[0];
-const pageTitles={sheet:'Character sheet',magic:'Spellbook',paths:'Paths & growth',play:'Play tools',notes:'Journal & backups'};
+const currentCharacter=()=>db.characters.find(c=>c.id===db.activeId)||db.characters[0];
+const ages = [
+  {id: 'prodigy', name: 'The Prodigy', years: '14–15', style: 'Wind Dancer', stat: 'DEX', schools: ['Illusion', 'Evocation', 'Divination']},
+  {id: 'noble', name: 'The Noble', years: '25–30', style: 'Grand Illusionist', stat: 'CHA', schools: ['Illusion', 'Enchantment', 'Evocation']},
+  {id: 'sage', name: 'The Sage', years: '60–70', style: 'Immovable Archmage', stat: 'WIS', schools: ['Illusion', 'Divination', 'Abjuration']},
+];
+const ageFields = ['name', 'stats', 'origins', 'prepared', 'paths', 'moves', 'spells', 'notes', 'backstory', 'sessionNotes', 'advancements'];
+const activeAge = () => ages.find(age => age.id === db.age) || ages[0];
+function characterName(c) {
+  if (!c.alwyn) return c.name || 'Unnamed Wizard';
+  const name = c.alwyn.name || 'Alwyn';
+  return c.name?.endsWith(' (device copy)') ? name + ' (device copy)' : name;
+}
+
+function current() {
+  const root = currentCharacter();
+  const form = root.alwyn?.forms?.[activeAge().id];
+  if (!form) return root;
+
+  // Route shared sheet actions through the same character record used by saves and exports.
+  const stats = new Proxy(form.stats, {
+    get: (local, key) => (key === 'INT' ? root.stats : local)[key],
+    set(local, key, value) {
+      (key === 'INT' ? root.stats : local)[key] = value;
+      return true;
+    },
+  });
+  return new Proxy(root, {
+    get: (character, key) => key === 'stats' ? stats : (ageFields.includes(key) ? form : character)[key],
+    set(character, key, value) {
+      (ageFields.includes(key) ? form : character)[key] = value;
+      return true;
+    },
+  });
+}
+
+if (currentCharacter().alwyn) screen = 'alwyn';
+const pageTitles={alwyn:'Alwyn overview',sheet:'Character sheet',magic:'Spellbook',paths:'Paths & growth',play:'Play tools',notes:'Journal & backups'};
 function driveCharacters() {
   return db.characters.map(({updatedAt, ...character}) => character);
 }
@@ -132,9 +168,11 @@ const driveSync = window.createArcanumDriveSync?.({
     persist();
   },
   apply(characters, link) {
+    const wasGrouped = Boolean(currentCharacter().alwyn);
     db.characters = characters;
     db.drive = link;
     if (!characters.some(character => character.id === db.activeId)) db.activeId = characters[0].id;
+    if (!wasGrouped && currentCharacter().alwyn) screen = 'alwyn';
     render();
     persist();
   },
@@ -156,13 +194,171 @@ const availableSubs=c=>SCHOOLS.filter(s=>allPrepared(c).includes(s.id)).map(s=>s
 const conditionStat=c=>Object.fromEntries(CONDITIONS.map(x=>[x.stat,c.conditions[x.name]!== 'clear']));
 const conditionCount=c=>Object.values(c.conditions).filter(v=>v==='marked'||v==='locked').length;
 const fmtSign=n=>n>0?'+'+n:String(n);
-function renderNav(){document.getElementById('nav-desktop').innerHTML=NAV.map(n=>`<button class="nav-item ${screen===n.id?'active':''}" data-action="nav" data-screen="${n.id}">${ico(n.icon)}<span>${n.label==='Sheet'?'Overview':n.label==='Magic'?'Spellbook':n.label==='Play'?'Play tools':n.label}</span></button>`).join('');document.getElementById('nav-mobile').innerHTML=NAV.map(n=>`<button class="mobile-tab ${screen===n.id?'active':''}" data-action="nav" data-screen="${n.id}" aria-current="${screen===n.id?'page':'false'}">${ico(n.icon)}<span>${n.label}</span></button>`).join('');}
-function render(){document.documentElement.dataset.theme=db.theme==='light'?'light':'dark';document.getElementById('page-title').textContent=pageTitles[screen];document.getElementById('page-eyebrow').textContent=esc(current().name).replace(/&amp;/g,'&').slice(0,24).toUpperCase();renderNav();const target=document.getElementById('screen');target.innerHTML={sheet:renderSheet,magic:renderMagic,paths:renderPaths,play:renderPlay,notes:renderNotes}[screen]();}
+function renderNav(){document.getElementById('nav-desktop').innerHTML=NAV.map(n=>`<button class="nav-item ${screen===n.id?'active':''}" data-action="nav" data-screen="${n.id}">${ico(n.icon)}<span>${n.label==='Sheet'?(currentCharacter().alwyn?'Sheet':'Overview'):n.label==='Magic'?'Spellbook':n.label==='Play'?'Play tools':n.label}</span></button>`).join('');document.getElementById('nav-mobile').innerHTML=NAV.map(n=>`<button class="mobile-tab ${screen===n.id?'active':''}" data-action="nav" data-screen="${n.id}" aria-current="${screen===n.id?'page':'false'}">${ico(n.icon)}<span>${n.label}</span></button>`).join('');}
+function render() {
+  const root = currentCharacter();
+  if (screen === 'alwyn' && !root.alwyn) screen = 'sheet';
+  document.documentElement.dataset.theme = db.theme === 'light' ? 'light' : 'dark';
+  document.getElementById('page-title').textContent = pageTitles[screen];
+  document.getElementById('page-eyebrow').textContent = (
+    root.alwyn && screen !== 'alwyn' ? characterName(root) + ' · ' + activeAge().name : characterName(root)
+  ).toUpperCase();
+  renderNav();
+  const target = document.getElementById('screen');
+  target.dataset.age = root.alwyn && screen !== 'alwyn' ? activeAge().id : '';
+  const pages = {alwyn: renderAlwyn, sheet: renderSheet, magic: renderMagic, paths: renderPaths, play: renderPlay, notes: renderNotes};
+  target.innerHTML = (root.alwyn ? renderAgeNav() : '') + pages[screen]();
+}
 const pagehead=(title,desc,actions='')=>`<div class="pagehead"><div><div class="eyebrow">DW2 BETA V3 · WIZARD</div><h1>${title}</h1><p>${desc}</p></div>${actions}</div>`;
 const field=(label,path,v,placeholder='',type='text')=>`<label class="input-wrap"><span class="field-label">${label}</span><input class="input" data-bind="${path}" type="${type}" placeholder="${esc(placeholder)}" value="${esc(v)}" ${type==='number'?'step="1"':''}/></label>`;
 const select=(label,path,val,options)=>`<label class="input-wrap"><span class="field-label">${label}</span><select data-bind="${path}">${options.map(o=>{const value=typeof o==='object'?o.id:o,label=typeof o==='object'?o.name:o;return `<option value="${esc(value)}" ${val===value?'selected':''}>${esc(label)}</option>`}).join('')}</select></label>`;
 const pill=(label,type='')=>`<span class="pill ${type}">${esc(label)}</span>`;
 const infoCard=(title,body)=>`<section class="card"><div class="card-title"><h2>${title}</h2></div>${body}</section>`;
+
+function renderAgeNav() {
+  return `<nav class="age-nav" aria-label="Alwyn's ages">
+    <button class="age-tab" data-action="alwyn-overview" aria-pressed="${screen === 'alwyn'}">
+      <strong>Alwyn</strong><span>Overview</span>
+    </button>
+    ${ages.map(age => `<button class="age-tab" data-action="alwyn-age" data-age="${age.id}"
+      aria-pressed="${screen !== 'alwyn' && activeAge().id === age.id}">
+      <strong>${age.name}</strong><span>Age ${age.years}</span>
+    </button>`).join('')}
+  </nav>`;
+}
+
+function renderAlwyn() {
+  const root = currentCharacter();
+  const {alwyn} = root;
+  return pagehead(esc(characterName(root)), 'The Fractured Archmage',
+    `<button class="btn" data-action="alwyn-edit">${ico('edit')} Edit profile</button>`)
+    + `<section class="card age-overview">
+      ${alwyn.overview ? `<p class="age-summary">${esc(alwyn.overview)}</p>` : ''}
+      <dl class="age-resources" aria-label="Shared resources">
+        <div><dt>Level</dt><dd>${esc(root.level)}</dd></div>
+        <div><dt>HP</dt><dd>${esc(root.hp)} / ${maxHp(root)}</dd></div>
+        <div><dt>XP</dt><dd>${esc(root.xp)} / 5</dd></div>
+        <div><dt>Conditions</dt><dd>${conditionCount(root) || 'Clear'}</dd></div>
+      </dl>
+    </section>
+    <section aria-labelledby="ages-title">
+      <div class="age-section-head"><h2 id="ages-title">The three ages</h2></div>
+      <div class="age-grid">${ages.map(age => {
+        const sheet = alwyn.forms[age.id] || root;
+        const portrait = sheet.origins.portrait;
+        return `<article class="card age-preview" data-age="${age.id}">
+          <div class="age-preview-head">
+            ${portrait ? `<img src="${esc(portrait)}" alt="" loading="lazy">` : ''}
+            <div><p class="micro muted">Age ${age.years}</p><h3>${age.name}</h3><p class="small">${age.style}</p></div>
+          </div>
+          ${alwyn.personality[age.id] ? `<p class="age-personality">${esc(alwyn.personality[age.id])}</p>` : ''}
+          <p class="small muted">${sheet.prepared.length ? esc(sheet.prepared.join(' · ')) : 'No prepared schools'}</p>
+          <button class="btn age-open" data-action="alwyn-age" data-age="${age.id}">Open ${age.name.toLowerCase()} sheet</button>
+        </article>`;
+      }).join('')}</div>
+    </section>
+    <div class="age-inventory">${recordCard(root, 'inventory')}</div>`;
+}
+
+function ageRoleplay() {
+  const {alwyn} = currentCharacter();
+  if (!alwyn) return '';
+  const age = activeAge();
+  return infoCard(`${age.name} · Roleplay`, `<div class="block-stack">
+    <p class="small muted">${age.style} · Age ${age.years}</p>
+    ${alwyn.personality[age.id] ? `<p class="age-summary">${esc(alwyn.personality[age.id])}</p>` : ''}
+    <div><button class="btn" data-action="alwyn-edit">Edit profile</button></div>
+  </div>`);
+}
+
+function alwynModal() {
+  const root = currentCharacter();
+  const profile = root.alwyn;
+  const choices = db.characters.filter(entry => entry.id !== root.id && !entry.alwyn);
+  const options = choices.map(entry => `<option value="${esc(entry.id)}">${esc(characterName(entry))}</option>`).join('');
+  modal(profile ? 'Edit Alwyn’s profile' : 'Set up Alwyn’s three ages', `<form id="alwyn-form">
+    <div class="block-stack">
+      ${!profile ? `<p class="para small">This sheet becomes the Prodigy. Use an existing sheet for each remaining age or create it. The Prodigy’s progress becomes shared, and carried items from selected sheets come with you.</p>
+        ${options ? `<div class="field-grid">${ages.slice(1).map(age => `<label><span class="field-label">${age.name} sheet</span>
+          <select name="sheet-${age.id}"><option value="">Create an age sheet</option>${options}</select></label>`).join('')}</div>` : ''}` : ''}
+      <label><span class="field-label">Alwyn overview</span><textarea name="overview" maxlength="3500" placeholder="What connects Alwyn’s three ages?">${esc(profile?.overview || '')}</textarea></label>
+      ${ages.map(age => `<label><span class="field-label">${age.name} · Personality &amp; memories</span>
+        <textarea name="${age.id}" maxlength="3500" placeholder="How does Alwyn act, fight, and remember his past at this age?">${esc(profile?.personality[age.id] || '')}</textarea></label>`).join('')}
+    </div>
+    <div class="modal-actions"><button type="button" class="btn" data-action="close-modal">Cancel</button>
+      <button type="submit" class="btn primary">${profile ? 'Save profile' : 'Create Alwyn profile'}</button></div>
+  </form>`);
+}
+
+function copyAgeFields(character) {
+  return structuredClone(Object.fromEntries(ageFields.map(key => [key, character[key]])));
+}
+
+function newAgeSheet(root, age) {
+  const form = fresh('Alwyn · ' + age.name);
+  form.stats = {STR: -1, DEX: 0, INT: root.stats.INT, WIS: 0, CHA: 0, [age.stat]: 1};
+  form.origins = {...root.origins, look: '', portrait: ''};
+  form.prepared = age.schools.slice();
+  form.paths = [];
+  form.spells = [];
+  return form;
+}
+
+function createAlwyn(root, selection) {
+  const forms = {};
+  const mergedIds = new Set();
+  for (const age of ages.slice(1)) {
+    const id = selection.get('sheet-' + age.id);
+    const source = db.characters.find(entry => entry.id === id && entry.id !== root.id && !entry.alwyn);
+    if (source && mergedIds.has(source.id)) throw new Error('Choose a different sheet for each age.');
+    if (source) mergedIds.add(source.id);
+    forms[age.id] = copyAgeFields(source || newAgeSheet(root, age));
+  }
+
+  const merged = db.characters.filter(entry => mergedIds.has(entry.id));
+  for (const key of ['inventory', 'journalEntries']) {
+    const records = new Map((root[key] || []).map(record => [record.id, record]));
+    for (const record of merged.flatMap(source => source[key] || [])) {
+      const existing = records.get(record.id);
+      if (!existing) records.set(record.id, record);
+      else if (JSON.stringify(existing) !== JSON.stringify(record)) {
+        const id = uid();
+        records.set(id, {...record, id});
+      }
+    }
+    root[key] = [...records.values()];
+  }
+  const relationships = new Map(root.relationships.map(rel => [JSON.stringify(rel), rel]));
+  for (const source of merged) {
+    for (const rel of source.relationships) relationships.set(JSON.stringify(rel), rel);
+    root.equipment = [...new Set([...root.equipment, ...source.equipment])];
+    root.forgotten = [...new Set([...root.forgotten, ...source.forgotten])];
+    for (const [item, used] of Object.entries(source.used)) {
+      root.used[item] = Math.max(root.used[item] || 0, Number(used) || 0);
+    }
+  }
+  root.relationships = [...relationships.values()];
+  db.characters = db.characters.filter(entry => !mergedIds.has(entry.id));
+  return {name: 'Alwyn', forms, overview: '', personality: {}};
+}
+
+function saveAlwynProfile(form) {
+  const root = currentCharacter();
+  const data = new FormData(form);
+  try {
+    root.alwyn ||= createAlwyn(root, data);
+  } catch (error) {
+    toast(error.message);
+    return;
+  }
+  root.alwyn.overview = String(data.get('overview') || '').trim().slice(0, 3500);
+  root.alwyn.personality = Object.fromEntries(ages.map(age => [age.id, String(data.get(age.id) || '').trim().slice(0, 3500)]));
+  if (!db.age) db.age = 'prodigy';
+  save();
+  closeModal();
+  screen = 'alwyn';
+  render();
+}
 
 const storyFields = [
   ['history', 'Personal history', 'Where did you come from?'],
@@ -187,7 +383,7 @@ function recordCard(c, key) {
   const earlier = !inventory && c.notes
     ? `<details><summary>Earlier campaign notes</summary><label><span class="field-label">Notes</span><textarea data-bind="notes">${esc(c.notes)}</textarea></label></details>`
     : '';
-  return infoCard(inventory ? 'Carried inventory' : 'Campaign journal', `<div class="block-stack">${earlier}
+  return infoCard(inventory ? (c.alwyn ? 'Shared inventory' : 'Carried inventory') : 'Campaign journal', `<div class="block-stack">${earlier}
     <div class="group-list">${rows || `<div class="empty">${inventory ? 'No carried items yet' : 'No journal entries yet'}</div>`}</div>
     <div><button class="btn" data-action="record-edit" data-key="${key}">${ico('plus')} Add ${inventory ? 'item' : 'entry'}</button></div></div>`);
 }
@@ -220,9 +416,10 @@ function cleanRecord(key, record, id) {
   return {id, name, details, date};
 }
 
-function renderSheet(){const c=current(),mx=maxHp(c),count=conditionCount(c),stats=CONDITIONS.reduce((a,x)=>(a[x.stat]=x.name,a),{});return pagehead('Your character','Your central character sheet. Changes save automatically on this device.',`<button class="btn hide-mobile" data-action="print">${ico('printer')} Print</button>`)+
+function renderSheet(){const c=current(),mx=maxHp(c),count=conditionCount(c),stats=CONDITIONS.reduce((a,x)=>(a[x.stat]=x.name,a),{});return pagehead(c.alwyn ? activeAge().name : 'Your character',c.alwyn ? esc(characterName(currentCharacter())) + ' · Age ' + activeAge().years : 'Your central character sheet. Changes save automatically on this device.',`<button class="btn hide-mobile" data-action="print">${ico('printer')} Print</button>`)+
 `<section class="card hero"><div class="hero-inner"><div class="hero-top"><button class="avatar" data-action="portrait" title="Change character portrait" aria-label="Change character portrait">${c.origins.portrait?`<img src="${esc(c.origins.portrait)}" alt="Character portrait" style="width:100%;height:100%;border-radius:inherit;object-fit:cover"/>`:'✦'}</button><div><h2 class="hero-name">${esc(c.name||'Unnamed Wizard')}</h2><div class="hero-meta">${pill(`Level ${c.level} Wizard`,'accent')}${c.paths.length?c.paths.map(p=>pill(p,'mint')).join(''):pill('No Path acquired')}${pill(`${armor(c)} Armor`)}</div></div></div><div class="hero-controls">${field('Character name','name',c.name,'Your Wizard')}${field('Pronouns','pronouns',c.pronouns,'they/them')}${field('Player name','player',c.player,'Optional')}</div>${c.level<2&&c.paths.length?'<div class="hero-sub">Rules check: Wizard Paths are normally gained through advancements after level 1.</div>':''}</div></section>`+
 `<div class="cols-2" style="margin-top:18px"><div class="block-stack">
+${ageRoleplay()}
 ${infoCard('Attributes',`<div class="stats-grid">${['STR','DEX','INT','WIS','CHA'].map(stat=>`<div class="stat"><div class="stat-name">${stat}</div><div class="stat-value"><button data-action="stat" data-stat="${stat}" data-delta="-1" aria-label="Decrease ${stat}">−</button><span>${fmtSign(c.stats[stat])}</span><button data-action="stat" data-stat="${stat}" data-delta="1" aria-label="Increase ${stat}">+</button></div>${c.conditions[stats[stat]]!=='clear'?'<div class="stat-penalty">Disadvantage</div>':'<div class="micro subtle">&nbsp;</div>'}</div>`).join('')}</div><div class="footnote" style="margin-top:11px">The level-1 starting spread is +2, +1, 0, 0, −1. Adjust values when you gain stat advancements; allocation is not enforced automatically.</div>`)}
 ${infoCard('Character background',`<div class="field-grid">${field('Ancestry','origins.ancestry',c.origins.ancestry,'Elf, dwarf, human…')}${field('Community','origins.community',c.origins.community,'Arcane academy…')}${field('Background','origins.background',c.origins.background,'Former occupation…')}<label class="input-wrap full"><span class="field-label">Appearance / look</span><textarea data-bind="origins.look" placeholder="Outfit, eyes, markings, focus, demeanor…">${esc(c.origins.look)}</textarea></label></div>`)}
 ${infoCard('Equipment & focus',`<div class="field-grid">${select('Arcane focus','focus',c.focus,FOCI)}<div><span class="field-label">Focus benefit</span><div class="alert info">${esc(FOCI.find(f=>f.id===c.focus)?.desc||'')}</div></div><div class="full"><span class="field-label">Equipment (choose two at character creation)</span><div class="group-list">${EQUIPMENT.map(e=>`<div class="group-item"><label style="display:flex;gap:10px;align-items:center;flex:1;cursor:pointer"><input type="checkbox" data-equipment="${e.id}" ${c.equipment.includes(e.id)?'checked':''}/><span><strong>${esc(e.name)}</strong><span class="micro muted" style="display:block">${esc(e.desc)}</span></span></label>${e.max&&c.equipment.includes(e.id)?`<div class="flex-row"><button class="btn tiny" data-action="use" data-item="${e.id}" data-delta="1">Use</button><span class="micro muted">${clamp(c.used[e.id]||0,0,e.max)}/${e.max}</span><button class="btn tiny" data-action="use" data-item="${e.id}" data-delta="-1">↺</button></div>`:''}</div>`).join('')}</div></div></div>`)}
@@ -249,7 +446,7 @@ ${infoCard('Spellcasting checklist',`<div class="group-list"><div class="group-i
 function renderNotes(){const c=current();return pagehead('Journal & safekeeping','Keep campaign notes, relationships, and backups of every character you create.')+`<div class="cols-2"><div class="block-stack">${backstoryCard(c)}
 ${recordCard(c, 'journalEntries')}
 ${infoCard('Relationships',`<p class="para small">Record PCs, relationship descriptions, and Depth (0–3).</p><div class="group-list">${c.relationships.length?c.relationships.map((rel,i)=>`<div class="group-item"><div style="flex:1"><strong>${esc(rel.name)}</strong><div class="micro muted">${esc(rel.description)}</div><div class="micro muted">Depth: ${clamp(rel.depth||0,0,3)}</div></div><button class="icon-btn" data-action="relationship-edit" data-index="${i}" aria-label="Edit relationship">${ico('edit')}</button></div>`).join(''):'<div class="empty">No relationships yet</div>'}</div><button class="btn" style="margin-top:13px" data-action="relationship-new">${ico('plus')} Add relationship</button>`)}
-</div><div class="block-stack">${infoCard('Your characters',`<div class="group-list">${db.characters.map(x=>`<div class="character-row ${x.id===c.id?'current':''}"><div class="flex-row" style="min-width:0"><div class="char-mini">✦</div><div><strong>${esc(x.name||'Unnamed Wizard')}</strong><p>Level ${x.level} · ${x.paths.join(' + ')||'Wizard'}</p></div></div>${x.id===c.id?pill('Current','accent'):`<button class="btn tiny" data-action="character-switch" data-id="${x.id}">Open</button>`}</div>`).join('')}</div><div class="flex-row" style="margin-top:14px"><button class="btn" data-action="character-new">${ico('plus')} New</button><button class="btn" data-action="character-duplicate">${ico('copy')} Duplicate</button></div><div class="separator"></div><button class="btn danger" data-action="character-delete">${ico('delete')} Delete current character</button>`)}
+</div><div class="block-stack">${infoCard('Your characters',`<div class="group-list">${db.characters.map(x=>`<div class="character-row ${x.id===c.id?'current':''}"><div class="flex-row" style="min-width:0"><div class="char-mini">✦</div><div><strong>${esc(characterName(x))}</strong><p>Level ${x.level} · ${x.alwyn ? 'Three ages' : esc(x.paths.join(' + ')||'Wizard')}</p></div></div>${x.id===c.id?pill('Current','accent'):`<button class="btn tiny" data-action="character-switch" data-id="${x.id}">Open</button>`}</div>`).join('')}</div><div class="flex-row" style="margin-top:14px"><button class="btn" data-action="character-new">${ico('plus')} New</button><button class="btn" data-action="character-duplicate">${ico('copy')} Duplicate</button></div><div class="separator"></div><button class="btn danger" data-action="character-delete">${ico('delete')} Delete current character</button>${!c.alwyn && /\balwyn\b/i.test(c.name) ? `<div class="separator"></div><button class="btn primary" data-action="alwyn-edit">Set up Alwyn’s three ages</button>` : ''}`)}
 ${driveSync?.configured ? infoCard('Google Drive', `<div class="group-list"><p class="para small">Sync your characters in the Drive folder you choose. <a href="./privacy.html" target="_blank" rel="noopener">Privacy</a></p><p id="drive-status" class="para small" role="status">${esc(driveSync.status())}</p><button id="drive-button" class="btn btn-wide" data-action="drive-sync" ${driveSync.disabled()?'disabled':''}>${esc(driveSync.button())}</button><div id="drive-disconnect-row" ${db.drive?'':'hidden'}><button id="drive-disconnect" class="btn btn-wide" data-action="drive-disconnect" ${driveSync.disabled()?'disabled':''}>Disconnect this device</button></div></div>`) : ''}
 ${infoCard('Export & restore',`<div class="alert info" style="margin-bottom:17px">Your edits are saved automatically <strong>in this browser</strong>. Export a backup to keep a separate copy or move your characters to another device.</div><div class="group-list"><button class="btn btn-wide primary" data-action="export">${ico('download')} Export ALL characters · JSON</button><button class="btn btn-wide" data-action="import">${ico('upload')} Import a JSON backup</button><button class="btn btn-wide" data-action="export-character">${ico('download')} Export current character only</button><button class="btn btn-wide" data-action="print">${ico('printer')} Print character sheet</button></div><p class="footnote" style="margin-top:14px">Import adds characters from a saved backup without overwriting existing ones. Backups include stats, notes, spells, and portrait data. Keep a copy somewhere you control (e.g., Files, Google Drive, or another cloud folder).</p>`)}
 ${infoCard('App information',`<div class="group-list"><div class="group-item"><span>Theme</span><button class="btn tiny" data-action="theme">${db.theme==='dark'?'Dark':'Light'} · change</button></div><div class="group-item"><span>Rule source</span>${pill('Dungeon World 2 Beta v3')}</div><div class="group-item"><span>Storage</span>${pill(volatile?'Needs backup':'Local browser','accent')}</div></div><p class="footnote" style="margin-top:13px">Built from your DW2 Beta v3 Character Keeper export. This is an unofficial character tool. Spell examples are proposals requiring GM approval. For offline phone installation, use the hosted PWA version over HTTPS; a downloaded local HTML file may have different browser storage behavior.</p>`)}
@@ -266,19 +463,32 @@ function characterNewModal(){modal('New Wizard',`<form id="new-character-form"><
 function pathToggle(id){const c=current(),p=PATHS.find(x=>x.id===id);if(!p)return;if(hasPath(c,id)){if(!confirm(`Remove ${id} Path? Its unlocked moves will also be removed.`))return;c.paths=c.paths.filter(v=>v!==id);c.moves=c.moves.filter(m=>!p.moves.some(x=>x.id===m));c.prepared=[...new Set(c.prepared)].slice(0,3);}else{if(c.paths.length>=2){toast('This Wizard sheet tracks up to two Wizard Paths.');return}c.paths.push(id);if(c.prepared.includes(p.school))c.prepared=c.prepared.filter(x=>x!==p.school);if(c.level===1)toast('Rules note: Paths normally require a level-up advancement.');}save();render();}
 function exportJSON(data,filename){const blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json'});const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download=filename;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),1500);toast('JSON backup created. Keep a copy outside this browser.');}
 function exportAll(){save();exportJSON({format:'Arcanum DW2 Wizard Keeper',version:1,exportedAt:new Date().toISOString(),characters:db.characters},'Arcanum-DW2-all-characters.json')}
-function exportChar(){save();exportJSON({format:'Arcanum DW2 Wizard Keeper',version:1,exportedAt:new Date().toISOString(),characters:[current()]},`Arcanum-${(current().name||'wizard').replace(/[^a-z0-9-]+/gi,'-')}.json`)}
-function normalizeImported(x){if(!x||typeof x!=='object'||Array.isArray(x))return null;const d=fresh(String(x.name||'Imported wizard').slice(0,120));const safe=(key,defaultVal)=>Array.isArray(x[key])?x[key]:defaultVal;
+function exportChar(){save();exportJSON({format:'Arcanum DW2 Wizard Keeper',version:1,exportedAt:new Date().toISOString(),characters:[currentCharacter()]},`Arcanum-${characterName(currentCharacter()).replace(/[^a-z0-9-]+/gi,'-')}.json`)}
+function normalizeImported(x, includeAlwyn = true){if(!x||typeof x!=='object'||Array.isArray(x))return null;const d=fresh(String(x.name||'Imported wizard').slice(0,120));const safe=(key,defaultVal)=>Array.isArray(x[key])?x[key]:defaultVal;
 Object.assign(d,{...x,id:uid(),name:String(x.name||'Imported wizard').slice(0,120),level:clamp(Number(x.level)||1,1,99),stats:{...d.stats,...(x.stats||{})},origins:{...d.origins,...(x.origins||{})},conditions:{...d.conditions,...(x.conditions||{})},hp:Math.max(0,Number(x.hp)||0),paths:safe('paths',[]).filter(p=>PATHS.some(q=>q.id===p)),moves:safe('moves',[]).filter(m=>PATHS.some(q=>q.moves.some(v=>v.id===m))),prepared:safe('prepared',[]).filter(p=>SCHOOLS.some(q=>q.id===p)).slice(0,3),forgotten:safe('forgotten',[]),equipment:safe('equipment',[]).filter(e=>EQUIPMENT.some(q=>q.id===e)),used:{...d.used,...(x.used||{})},spells:safe('spells',[]).slice(0,300).filter(sp=>sp&&typeof sp==='object').map(sp=>({...sp,id:uid()})),relationships:safe('relationships',[]).slice(0,40).filter(r=>r&&typeof r==='object'),createdAt:Date.now(),updatedAt:Date.now()});
   d.backstory = Object.fromEntries(storyFields.map(([key]) => [key, typeof x.backstory?.[key] === "string" ? x.backstory[key] : ""]));
   for (const key of ["inventory", "journalEntries"]) {
     d[key] = safe(key, []).map(record => cleanRecord(key, record, uid())).filter(Boolean);
   }
+  delete d.alwyn;
+  if (includeAlwyn && x.alwyn) {
+    const {forms, name, overview, personality} = x.alwyn;
+    if (!forms?.noble || !forms?.sage) throw new Error('Alwyn backup is missing an age sheet.');
+    const text = (value, limit = 3500) => typeof value === 'string' ? value.slice(0, limit) : '';
+    d.alwyn = {
+      name: text(name, 120) || 'Alwyn',
+      overview: text(overview),
+      forms: Object.fromEntries(ages.slice(1).map(age =>
+        [age.id, copyAgeFields(normalizeImported({...d, ...forms[age.id]}, false))])),
+      personality: Object.fromEntries(ages.map(age => [age.id, text(personality?.[age.id])])),
+    };
+  }
   return d;
 }
-function handleImport(file){if(!file)return;const reader=new FileReader();reader.onload=()=>{try{const data=JSON.parse(reader.result);if(data.format!=='Arcanum DW2 Wizard Keeper'||!Array.isArray(data.characters))throw Error('Invalid Arcanum backup');if(data.characters.length>100)throw Error('Too many characters in one backup');const imported=data.characters.map(normalizeImported).filter(Boolean);if(!imported.length)throw Error('No usable characters');db.characters.push(...imported);db.activeId=imported[0].id;screen='sheet';save();render();toast(`Imported ${imported.length} character${imported.length!==1?'s':''}. Existing characters were preserved.`)}catch(e){toast('Could not import backup: '+e.message)}};reader.readAsText(file);}
+function handleImport(file){if(!file)return;const reader=new FileReader();reader.onload=()=>{try{const data=JSON.parse(reader.result);if(data.format!=='Arcanum DW2 Wizard Keeper'||!Array.isArray(data.characters))throw Error('Invalid Arcanum backup');if(data.characters.length>100)throw Error('Too many characters in one backup');const imported=data.characters.map(character => normalizeImported(character)).filter(Boolean);if(!imported.length)throw Error('No usable characters');db.characters.push(...imported);db.activeId=imported[0].id;screen='sheet';save();render();toast(`Imported ${imported.length} character${imported.length!==1?'s':''}. Existing characters were preserved.`)}catch(e){toast('Could not import backup: '+e.message)}};reader.readAsText(file);}
 function roll(){const c=current();const modeMap={cast:'INT',melee:'STR',ranged:'DEX',dodge:'DEX',outsmart:'INT',sneak:'DEX',wis:'WIS',cha:'CHA'};let st=modeMap[diceMode]||'INT';if(diceMode==='cast'&&diceMag!=='?'&&Number(diceMag)>c.stats.INT){toast('Spell Magnitude is above your INT. Try a lesser effect or Ritual.');return;}let sources=(diceExtra==='advantage'?1:diceExtra==='disadvantage'?-1:0);if(diceMode==='cast'&&diceMag!=='?'&&Number(diceMag)===c.stats.INT)sources--;if(CONDITIONS.some(x=>x.stat===st&&c.conditions[x.name]!=='clear'))sources--;const d=sources>0?'advantage':sources<0?'disadvantage':'normal';let dice=Array.from({length:d==='normal'?2:3},()=>Math.floor(Math.random()*6)+1);let use=dice.slice();let omitted=null;if(d!=='normal'){const keep=d==='advantage'?[...dice].sort((a,b)=>b-a).slice(0,2):[...dice].sort((a,b)=>a-b).slice(0,2);const removed=d==='advantage'?Math.min(...dice):Math.max(...dice);omitted=dice.findIndex(z=>z===removed);use=keep;}
 const total=use.reduce((a,b)=>a+b,0)+c.stats[st];diceLast={dice,omitted,mod:c.stats[st],total,outcome:total>=10?'10+ · Success':total>=7?'7–9 · Success with complication':'6− · Trouble',mode:st+(d!=='normal'?' · '+d:'')};render();}
-function changeBind(path,val){if(path==='__diceMode'){diceMode=val;diceLast=null;render();return;}const c=current(),segments=path.split('.');let cur=c;for(let i=0;i<segments.length-1;i++)cur=cur[segments[i]]||(cur[segments[i]]={});const last=segments.at(-1);if(['hpBonus','armorBonus','level','treasure'].includes(path))val=Number(val)||0;cur[last]=val;scheduleSave();if(path==='name'){document.getElementById('page-eyebrow').textContent=String(val).slice(0,24).toUpperCase();}}
+function changeBind(path,val){if(path==='__diceMode'){diceMode=val;diceLast=null;render();return;}const c=current(),segments=path.split('.');let cur=c;for(let i=0;i<segments.length-1;i++)cur=cur[segments[i]]||(cur[segments[i]]={});const last=segments.at(-1);if(['hpBonus','armorBonus','level','treasure'].includes(path))val=Number(val)||0;cur[last]=val;scheduleSave();if(path==='name'&&!c.alwyn){document.getElementById('page-eyebrow').textContent=String(val).slice(0,24).toUpperCase();}}
 function refreshAfterChange(path){if(['level','hpBonus','armorBonus','focus','wealth','name','origins.portrait'].includes(path))render();}
 function handleAction(a){const c=current(),kind=a.dataset.action;switch(kind){
 case 'record-edit':
@@ -294,6 +504,22 @@ case 'record-delete': {
   break;
 }
 case 'nav':screen=a.dataset.screen;searchTerm='';render();window.scrollTo({top:0,behavior:'smooth'});break;
+case 'alwyn-edit':alwynModal();break;
+case 'alwyn-overview':screen='alwyn';render();document.querySelector('[data-action="alwyn-overview"]')?.focus();break;
+case 'alwyn-age': {
+  const age = ages.find(entry => entry.id === a.dataset.age);
+  if (!age || !c.alwyn) break;
+  db.age = age.id;
+  if (screen === 'alwyn') screen = 'sheet';
+  searchTerm = '';
+  magicFilter = 'All';
+  diceLast = null;
+  persist();
+  render();
+  document.querySelector(`.age-tab[data-age="${age.id}"]`)?.focus();
+  window.scrollTo({top: 0});
+  break;
+}
 case 'theme':db.theme=db.theme==='dark'?'light':'dark';save();render();break;
 case 'drive-sync':driveSync?.activate();break;
 case 'drive-disconnect':driveSync?.disconnect();break;
@@ -333,15 +559,20 @@ case 'relationship-new':relationshipModal(null);break;
 case 'relationship-edit':relationshipModal(Number(a.dataset.index));break;
 case 'relationship-delete':if(confirm('Delete this relationship?')){c.relationships.splice(Number(a.dataset.index),1);save();closeModal();render();}break;
 case 'character-new':characterNewModal();break;
-case 'character-duplicate':{const x=normalizeImported(current());x.name+=' (copy)';db.characters.push(x);db.activeId=x.id;save();render();toast('Duplicate character created.');break;}
-case 'character-switch':db.activeId=a.dataset.id;save();render();toast('Character opened.');break;
-case 'character-delete':if(db.characters.length<=1){toast('Create another character before deleting the last one.');break;}if(confirm(`Delete ${c.name} ${db.drive?'from this device and your next Drive sync':'from this browser'}? Export a backup first if you want to keep a copy.`)){db.characters=db.characters.filter(x=>x.id!==c.id);db.activeId=db.characters[0].id;save();render();}break;
+case 'character-duplicate':{const x=normalizeImported(currentCharacter());x.name+=' (copy)';if(x.alwyn)x.alwyn.name+=' (copy)';db.characters.push(x);db.activeId=x.id;save();render();toast('Duplicate character created.');break;}
+case 'character-switch':db.activeId=a.dataset.id;if(currentCharacter().alwyn)screen='alwyn';save();render();toast('Character opened.');break;
+case 'character-delete':if(db.characters.length<=1){toast('Create another character before deleting the last one.');break;}if(confirm(`Delete ${characterName(currentCharacter())}${c.alwyn?' and all three age sheets':''} ${db.drive?'from this device and your next Drive sync':'from this browser'}? Export a backup first if you want to keep a copy.`)){db.characters=db.characters.filter(x=>x.id!==c.id);db.activeId=db.characters[0].id;save();render();}break;
 default:break;
 }}
 document.addEventListener('click',e=>{const a=e.target.closest('[data-action]');if(a){e.preventDefault();handleAction(a)}});
 document.addEventListener('change',e=>{const a=e.target;if(a.matches('[data-bind]')){changeBind(a.dataset.bind,a.value);refreshAfterChange(a.dataset.bind)}if(a.matches('[data-school]')){const c=current(),s=a.dataset.school;if(a.checked){if(c.prepared.length>=3){toast('Maximum three normal Prepared Schools. Owned Paths grant their schools separately.');render();return}c.prepared.push(s);}else c.prepared=c.prepared.filter(x=>x!==s);save();render();}if(a.matches('[data-equipment]')){const c=current(),id=a.dataset.equipment;if(a.checked){if(c.equipment.length>=2){toast('At character creation, choose two extra equipment items.');render();return}c.equipment.push(id);}else{c.equipment=c.equipment.filter(x=>x!==id);}save();render();}if(a.id==='dice-mag'){diceMag=a.value;diceLast=null;render();}if(a.id==='dice-extra'){diceExtra=a.value;diceLast=null;render();}});
 document.addEventListener('input',e=>{if(e.target.matches('[data-bind]')&&!e.target.matches('select'))changeBind(e.target.dataset.bind,e.target.value);if(e.target.id==='spell-search'){searchTerm=e.target.value;const pos=e.target.selectionStart;render();const field=document.getElementById('spell-search');if(field){field.focus();field.setSelectionRange(pos,pos);}}});
 document.addEventListener('submit',e=>{
+if (e.target.id === 'alwyn-form') {
+  e.preventDefault();
+  saveAlwynProfile(e.target);
+  return;
+}
 if(e.target.id === 'character-record-form') {
   e.preventDefault();
   const {key, id} = e.target.dataset;

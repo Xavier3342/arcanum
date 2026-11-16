@@ -1,0 +1,79 @@
+.age-nav {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 6px;
+  margin-bottom: 22px;
+  padding: 5px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--surface);
+}
+
+.age-tab {
+  display: grid;
+  text-align: left;
+  gap: 1px;
+  min-height: 52px;
+  padding: 7px 11px;
+  color: var(--muted);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 9px;
+  line-height: 1.24;
+}
+
+[data-age="prodigy"] { --age-color: #8fcef0; }
+[data-age="noble"] { --age-color: #efbd83; }
+[data-age="sage"] { --age-color: #a6d7b4; }
+[data-theme="light"] [data-age="prodigy"] { --age-color: #20658d; }
+[data-theme="light"] [data-age="noble"] { --age-color: #8c4c16; }
+[data-theme="light"] [data-age="sage"] { --age-color: #326248; }
+
+.age-tab strong { font-size: 13px; color: var(--text); }
+.age-tab span { font-size: 11px; }
+.age-tab:hover { background: var(--surface-2); }
+.age-tab[aria-pressed="true"] {
+  color: var(--age-color, var(--accent));
+  border-color: currentColor;
+  background: color-mix(in srgb, currentColor 10%, var(--surface));
+}
+
+.age-overview, .age-grid, .age-inventory { margin-bottom: 20px; }
+.age-summary, .age-personality { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; }
+.age-resources {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+  margin: 0;
+}
+.age-summary + .age-resources { margin-top: 17px; }
+.age-resources > div { padding: 9px; background: var(--surface-2); border-radius: 8px; }
+.age-resources dt { color: var(--muted); font-size: 11px; }
+.age-resources dd { margin: 0; color: var(--text); font-size: 16px; font-weight: 650; }
+.age-section-head h2 { margin: 0 0 10px; font: 500 22px/1.2 var(--serif); }
+.age-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+.age-preview { display: grid; align-content: start; gap: 12px; border-top: 3px solid var(--age-color); }
+.age-preview p { margin: 0; }
+.age-preview h3 { margin: 2px 0; color: var(--age-color); font: 500 22px/1.2 var(--serif); }
+.age-preview-head { display: flex; align-items: center; gap: 10px; }
+.age-preview-head img { width: 46px; height: 46px; object-fit: cover; border-radius: 9px; }
+.age-open { justify-self: start; }
+.main-content[data-age]:not([data-age=""]) .hero { border-top: 3px solid var(--age-color); }
+#alwyn-form textarea { min-height: 86px; }
+
+@media (max-width: 880px) {
+  .age-grid { grid-template-columns: minmax(0, 1fr); }
+}
+
+@media (max-width: 420px) {
+  .age-nav { gap: 3px; }
+  .age-tab { padding-inline: 4px; text-align: center; }
+  .age-tab strong { font-size: 11px; }
+  .age-tab span { font-size: 10px; }
+  .age-resources { gap: 5px; }
+  .age-resources > div { padding-inline: 5px; }
+}
+
+@media print {
+  .age-nav { display: none; }
+}

@@ -204,3 +204,21 @@ test('leaves local and remote data alone when the sync document is invalid', asy
   assert.match(first.sync.status(), /not a valid Arcanum save/);
   assert.equal(first.chars()[0].notes, 'before');
 });
+
+test('round-trips a grouped character and shared inventory to another device', async () => {
+  const drive = googleDrive();
+  const profile = {
+    ...character('Alwyn', 'Prodigy notes'),
+    inventory: [{id: 'cloak', name: 'Travel cloak', quantity: 1}],
+    alwyn: {
+      name: 'Alwyn', overview: 'Three ages',
+      forms: {noble: {notes: 'Royal court'}, sage: {notes: 'Arcane study'}},
+      personality: {prodigy: 'Playful', noble: 'Theatrical', sage: 'Patient'},
+    },
+  };
+  const first = device(drive, [profile]);
+  await first.connect();
+  const second = device(drive, [character('placeholder', '')]);
+  await second.connect();
+  assert.deepEqual(second.chars(), [profile]);
+});
