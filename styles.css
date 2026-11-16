@@ -52,3 +52,36 @@
   .quick-dice-form { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .quick-dice-form button { grid-column: 1 / -1; }
 }
+
+.spellbook-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.spell-filters {
+  display: grid;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+.spell-availability { display: flex; align-items: center; gap: 8px; color: var(--muted); }
+.spell-availability input { width: 17px; height: 17px; accent-color: var(--accent); }
+.spell-list-empty { grid-column: 1 / -1; }
+.spell-meta { margin-top: 7px; }
+.modal[data-view="spell-library"] { width: min(100%, 1060px); }
+#spell-library .spell-grid { grid-template-columns: repeat(auto-fit, minmax(min(100%, 228px), 1fr)); }
+
+.damage-roller {
+  display: grid;
+  grid-template-columns: minmax(90px, 1fr) minmax(130px, 1.2fr) auto;
+  align-items: end;
+  gap: 9px;
+}
+.damage-result { grid-column: 1 / -1; }
+.damage-result:not(:empty) { margin-top: 0; }
+
+@media (max-width: 540px) {
+  .damage-roller { grid-template-columns: minmax(0, 1fr) minmax(0, 1.25fr); }
+  .damage-roller button { grid-column: 1 / -1; }
+}
