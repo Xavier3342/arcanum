@@ -1,4 +1,4 @@
-/* Arcanum: self-contained DW2 Beta v3 Wizard keeper. No network, telemetry or libraries. */
+/* Arcanum: offline-first DW2 Beta v3 Wizard keeper with optional Drive sync. */
 (()=>{'use strict';
 const STORAGE='arcanum_dw2_v3_v1';
 const SCHOOLS=[
@@ -82,7 +82,67 @@ if(!db.characters.some(c=>c.id===db.activeId))db.activeId=db.characters[0].id;
 let screen='sheet',magicFilter='All',diceMode='cast',diceMag='0',diceExtra='normal',diceLast=null,toastTimer,saveTimer,searchTerm='';
 const current=()=>db.characters.find(c=>c.id===db.activeId)||db.characters[0];
 const pageTitles={sheet:'Character sheet',magic:'Spellbook',paths:'Paths & growth',play:'Play tools',notes:'Journal & backups'};
-const save=()=>{clearTimeout(saveTimer);try{current().updatedAt=Date.now();localStorage.setItem(STORAGE,JSON.stringify(db));volatile=false;updateStatus('Saved locally');}catch(e){volatile=true;updateStatus('Not saved — export backup');toast('Browser storage unavailable or full. Export a JSON backup.');}};
+function driveCharacters() {
+  return db.characters.map(({updatedAt, ...character}) => character);
+}
+
+function isBlankCharacter() {
+  function compare(character) {
+    const {id, createdAt, updatedAt, spells, ...fields} = character;
+    return JSON.stringify({...fields, spells: spells.map(({id, ...spell}) => spell)});
+  }
+  return db.characters.length === 1 && compare(db.characters[0]) === compare(fresh());
+}
+
+function persist() {
+  try {
+    localStorage.setItem(STORAGE, JSON.stringify(db));
+    volatile = false;
+  } catch {
+    volatile = true;
+    toast('Browser storage unavailable or full. Export a JSON backup.');
+  }
+  showSaveStatus();
+}
+
+function showSaveStatus() {
+  updateStatus(volatile ? 'Local save failed' : db.drive ? driveSync?.headline() || 'Saved locally' : 'Saved locally');
+  const message = document.getElementById('drive-status');
+  const button = document.getElementById('drive-button');
+  const disconnect = document.getElementById('drive-disconnect');
+  if (message) message.textContent = driveSync.status();
+  if (button) {
+    button.textContent = driveSync.button();
+    button.disabled = driveSync.disabled();
+  }
+  if (disconnect) {
+    disconnect.parentElement.hidden = !db.drive;
+    disconnect.disabled = driveSync.disabled();
+  }
+}
+
+const driveSync = window.createArcanumDriveSync?.({
+  characters: driveCharacters,
+  isBlank: isBlankCharacter,
+  canApply: () => !document.activeElement?.matches('input, textarea, select, [contenteditable]')
+    && document.getElementById('modal-scrim').classList.contains('hidden'),
+  link: () => db.drive,
+  setLink(link) {
+    db.drive = link;
+    persist();
+  },
+  apply(characters, link) {
+    db.characters = characters;
+    db.drive = link;
+    if (!characters.some(character => character.id === db.activeId)) db.activeId = characters[0].id;
+    render();
+    persist();
+  },
+  newId: uid,
+  showStatus: showSaveStatus,
+});
+
+const save=()=>{clearTimeout(saveTimer);saveTimer=null;current().updatedAt=Date.now();persist();driveSync?.queue();};
 const scheduleSave=()=>{updateStatus('Saving…');clearTimeout(saveTimer);saveTimer=setTimeout(save,360)};
 function updateStatus(t){const e=document.getElementById('save-status');if(e)e.textContent=t;}
 function toast(t){const el=document.getElementById('toast');el.textContent=t;el.classList.add('show');clearTimeout(toastTimer);toastTimer=setTimeout(()=>el.classList.remove('show'),3500)}
@@ -190,7 +250,8 @@ function renderNotes(){const c=current();return pagehead('Journal & safekeeping'
 ${recordCard(c, 'journalEntries')}
 ${infoCard('Relationships',`<p class="para small">Record PCs, relationship descriptions, and Depth (0–3).</p><div class="group-list">${c.relationships.length?c.relationships.map((rel,i)=>`<div class="group-item"><div style="flex:1"><strong>${esc(rel.name)}</strong><div class="micro muted">${esc(rel.description)}</div><div class="micro muted">Depth: ${clamp(rel.depth||0,0,3)}</div></div><button class="icon-btn" data-action="relationship-edit" data-index="${i}" aria-label="Edit relationship">${ico('edit')}</button></div>`).join(''):'<div class="empty">No relationships yet</div>'}</div><button class="btn" style="margin-top:13px" data-action="relationship-new">${ico('plus')} Add relationship</button>`)}
 </div><div class="block-stack">${infoCard('Your characters',`<div class="group-list">${db.characters.map(x=>`<div class="character-row ${x.id===c.id?'current':''}"><div class="flex-row" style="min-width:0"><div class="char-mini">✦</div><div><strong>${esc(x.name||'Unnamed Wizard')}</strong><p>Level ${x.level} · ${x.paths.join(' + ')||'Wizard'}</p></div></div>${x.id===c.id?pill('Current','accent'):`<button class="btn tiny" data-action="character-switch" data-id="${x.id}">Open</button>`}</div>`).join('')}</div><div class="flex-row" style="margin-top:14px"><button class="btn" data-action="character-new">${ico('plus')} New</button><button class="btn" data-action="character-duplicate">${ico('copy')} Duplicate</button></div><div class="separator"></div><button class="btn danger" data-action="character-delete">${ico('delete')} Delete current character</button>`)}
-${infoCard('Export & restore',`<div class="alert info" style="margin-bottom:17px">Your edits are saved automatically <strong>in this browser on this device</strong>. They do not sync across devices. Export a backup to keep your character safe or move it to your phone.</div><div class="group-list"><button class="btn btn-wide primary" data-action="export">${ico('download')} Export ALL characters · JSON</button><button class="btn btn-wide" data-action="import">${ico('upload')} Import a JSON backup</button><button class="btn btn-wide" data-action="export-character">${ico('download')} Export current character only</button><button class="btn btn-wide" data-action="print">${ico('printer')} Print character sheet</button></div><p class="footnote" style="margin-top:14px">Import adds characters from a saved backup without overwriting existing ones. Backups include stats, notes, spells, and portrait data. Keep a copy somewhere you control (e.g., Files, Google Drive, or another cloud folder).</p>`)}
+${driveSync?.configured ? infoCard('Google Drive', `<div class="group-list"><p id="drive-status" class="para small" role="status">${esc(driveSync.status())}</p><button id="drive-button" class="btn btn-wide" data-action="drive-sync" ${driveSync.disabled()?'disabled':''}>${esc(driveSync.button())}</button><div id="drive-disconnect-row" ${db.drive?'':'hidden'}><button id="drive-disconnect" class="btn btn-wide" data-action="drive-disconnect" ${driveSync.disabled()?'disabled':''}>Disconnect this device</button></div></div>`) : ''}
+${infoCard('Export & restore',`<div class="alert info" style="margin-bottom:17px">Your edits are saved automatically <strong>in this browser</strong>. Export a backup to keep a separate copy or move your characters to another device.</div><div class="group-list"><button class="btn btn-wide primary" data-action="export">${ico('download')} Export ALL characters · JSON</button><button class="btn btn-wide" data-action="import">${ico('upload')} Import a JSON backup</button><button class="btn btn-wide" data-action="export-character">${ico('download')} Export current character only</button><button class="btn btn-wide" data-action="print">${ico('printer')} Print character sheet</button></div><p class="footnote" style="margin-top:14px">Import adds characters from a saved backup without overwriting existing ones. Backups include stats, notes, spells, and portrait data. Keep a copy somewhere you control (e.g., Files, Google Drive, or another cloud folder).</p>`)}
 ${infoCard('App information',`<div class="group-list"><div class="group-item"><span>Theme</span><button class="btn tiny" data-action="theme">${db.theme==='dark'?'Dark':'Light'} · change</button></div><div class="group-item"><span>Rule source</span>${pill('Dungeon World 2 Beta v3')}</div><div class="group-item"><span>Storage</span>${pill(volatile?'Needs backup':'Local browser','accent')}</div></div><p class="footnote" style="margin-top:13px">Built from your DW2 Beta v3 Character Keeper export. This is an unofficial character tool. Spell examples are proposals requiring GM approval. For offline phone installation, use the hosted PWA version over HTTPS; a downloaded local HTML file may have different browser storage behavior.</p>`)}
 </div></div>`;}
 function modal(title,content){document.getElementById('modal-title').textContent=title;document.getElementById('modal-content').innerHTML=content;document.getElementById('modal-scrim').classList.remove('hidden');document.body.style.overflow='hidden';}
@@ -234,6 +295,8 @@ case 'record-delete': {
 }
 case 'nav':screen=a.dataset.screen;searchTerm='';render();window.scrollTo({top:0,behavior:'smooth'});break;
 case 'theme':db.theme=db.theme==='dark'?'light':'dark';save();render();break;
+case 'drive-sync':driveSync?.activate();break;
+case 'drive-disconnect':driveSync?.disconnect();break;
 case 'export':exportAll();break;
 case 'export-character':exportChar();break;
 case 'import':document.getElementById('import-file').click();break;
@@ -272,7 +335,7 @@ case 'relationship-delete':if(confirm('Delete this relationship?')){c.relationsh
 case 'character-new':characterNewModal();break;
 case 'character-duplicate':{const x=normalizeImported(current());x.name+=' (copy)';db.characters.push(x);db.activeId=x.id;save();render();toast('Duplicate character created.');break;}
 case 'character-switch':db.activeId=a.dataset.id;save();render();toast('Character opened.');break;
-case 'character-delete':if(db.characters.length<=1){toast('Create another character before deleting the last one.');break;}if(confirm(`Delete ${c.name} from this browser? This cannot be undone unless you have a backup.`)){db.characters=db.characters.filter(x=>x.id!==c.id);db.activeId=db.characters[0].id;save();render();}break;
+case 'character-delete':if(db.characters.length<=1){toast('Create another character before deleting the last one.');break;}if(confirm(`Delete ${c.name} ${db.drive?'from this device and your next Drive sync':'from this browser'}? Export a backup first if you want to keep a copy.`)){db.characters=db.characters.filter(x=>x.id!==c.id);db.activeId=db.characters[0].id;save();render();}break;
 default:break;
 }}
 document.addEventListener('click',e=>{const a=e.target.closest('[data-action]');if(a){e.preventDefault();handleAction(a)}});
@@ -298,5 +361,7 @@ document.getElementById('import-file').addEventListener('change',e=>{handleImpor
 document.getElementById('modal-scrim').addEventListener('click',e=>{if(e.target.id==='modal-scrim')closeModal()});
 document.addEventListener('keydown',e=>{if(e.key==='Escape')closeModal()});
 // Initial data and offline registration
-render();if(!volatile)save();else updateStatus('Storage unavailable — export backup');document.querySelectorAll('[data-icon]').forEach(el=>el.innerHTML=ico(el.dataset.icon));if('serviceWorker'in navigator&&/^https?:$/.test(location.protocol)){navigator.serviceWorker.register('./sw.js').catch(()=>{});} 
+window.addEventListener('pagehide', () => { if (saveTimer) save(); });
+document.addEventListener('visibilitychange', () => { if (document.hidden && saveTimer) save(); });
+render();if(!volatile)persist();else updateStatus('Storage unavailable — export backup');document.querySelectorAll('[data-icon]').forEach(el=>el.innerHTML=ico(el.dataset.icon));if('serviceWorker'in navigator&&/^https?:$/.test(location.protocol)){navigator.serviceWorker.register('./sw.js').catch(()=>{});} 
 })();
