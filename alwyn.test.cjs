@@ -36,8 +36,12 @@ function openApp(saved = null, random = Math.random) {
     state: () => JSON.parse(storage.get('arcanum_dw2_v3_v1')),
     screen: () => document.getElementById('screen').innerHTML,
     element: id => document.getElementById(id),
-    click(action, extra = {}) {
-      events.get('click')({preventDefault() {}, target: {closest: () => ({dataset: {action, ...extra}})}});
+    click(action, extra = {}, fromLibrary = false) {
+      const button = {dataset: {action, ...extra}, closest: () => fromLibrary ? {} : null};
+      events.get('click')({preventDefault() {}, target: {closest: () => button}});
+    },
+    change(selector, values) {
+      events.get('change')({target: {matches: candidate => candidate === selector, ...values}});
     },
     submit(id, fields, dataset = {}) {
       events.get('submit')({preventDefault() {}, target: {id, fields, dataset}});
@@ -158,4 +162,58 @@ test('quick dice rolls independently of the saved morning d3', () => {
   app.submit('quick-dice-form', {count: '2', sides: '6', modifier: '-1'});
   assert.match(app.element('quick-dice-result').innerHTML, /<strong>9<\/strong>.*2d6/s);
   assert.deepEqual(app.state(), {...state, age: 'sage'});
+});
+
+test('the expanded Spellbook retains Attack and availability filters when returning from a cast', () => {
+  const seed = openApp();
+  const kid = seed.fresh('Alwyn (Kid)');
+  const [available, unavailable] = [
+    {id: 'old', name: 'Crosswind', verb: 'Minor channel', sub: 'Elemental energies', category: 'Damage', mag: '0'},
+    {id: 'locked', name: 'Unprepared spell', verb: 'Modify emotions', sub: 'Sapient beings', category: 'Attack', mag: '0'},
+  ];
+  kid.spells = [available, unavailable];
+  const app = openApp({characters: [kid], activeId: kid.id});
+  app.click('nav', {screen: 'magic'});
+  assert.match(app.screen(), /Expand spellbook/);
+  app.click('magic-filter', {filter: 'Attack'});
+  app.change('[data-hide-unavailable]', {checked: true});
+  app.click('spell-library');
+  assert.equal(app.element('modal-title').textContent, 'Full spellbook');
+  assert.match(app.element('modal-content').innerHTML, /Cast Crosswind/);
+  assert.match(app.element('modal-content').innerHTML, /data-filter="Attack"/);
+  assert.doesNotMatch(app.element('modal-content').innerHTML, /Unprepared spell/);
+  app.click('spell-cast', {id: available.id}, true);
+  assert.match(app.element('modal-content').innerHTML, /Roll damage/);
+  app.click('close-modal');
+  assert.equal(app.element('modal-title').textContent, 'Full spellbook');
+  assert.match(app.element('modal-content').innerHTML, /Cast Crosswind/);
+  assert.doesNotMatch(app.element('modal-content').innerHTML, /Unprepared spell/);
+  assert.equal(app.state().characters[0].spells[0].category, 'Damage');
+});
+
+test('a spell can save a damage formula and roll separately from weapon moves', () => {
+  const kid = openApp().fresh('Alwyn (Kid)');
+  const app = openApp({characters: [kid], activeId: kid.id}, () => 0.5);
+  app.submit('spell-form', {
+    name: 'Crosswind', verb: 'Minor channel', sub: 'Elemental energies',
+    category: 'Attack', mag: '0', effect: 'A gust', note: '', damage: '2D6 + 1',
+  });
+  const spell = app.state().characters[0].spells[0];
+  assert.equal(spell.damage, '2d6+1');
+  app.click('spell-cast', {id: spell.id});
+  assert.match(app.element('modal-content').innerHTML, /name="formula" value="2d6\+1"/);
+  app.submit('spell-damage-form', {formula: spell.damage, mode: 'normal'});
+  assert.match(app.element('spell-damage-form-result').innerHTML, /9 damage/);
+  app.click('close-modal');
+  app.click('nav', {screen: 'play'});
+  assert.doesNotMatch(app.screen(), /Weapon damage/);
+  app.change('[data-bind]', {dataset: {bind: '__diceMode'}, value: 'melee'});
+  assert.match(app.screen(), /Weapon damage/);
+  app.submit('weapon-damage-form', {formula: 'd8+2', mode: 'minimum'});
+  assert.match(app.element('weapon-damage-form-result').innerHTML, /3 damage/);
+  app.click('roll');
+  assert.match(app.screen(), /3 damage/);
+  app.submit('weapon-damage-form', {formula: '0d6', mode: 'normal'});
+  assert.match(app.element('weapon-damage-form-result').textContent, /Enter damage dice/);
+  assert.equal(app.state().characters[0].hp, kid.hp);
 });
