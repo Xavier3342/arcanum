@@ -38,7 +38,13 @@
   background: color-mix(in srgb, currentColor 10%, var(--surface));
 }
 
-.age-overview, .age-grid, .age-inventory { margin-bottom: 20px; }
+.age-overview, .age-grid, .age-inventory, .morning-roll { margin-bottom: 20px; }
+.overview-actions { flex-wrap: wrap; }
+.overview-actions a { text-decoration: none; }
+.morning-roll p { margin: 0; }
+.morning-actions { flex-wrap: wrap; }
+.morning-result { color: var(--accent); }
+#campaign-journal { scroll-margin-top: 100px; min-width: 0; }
 .age-summary, .age-personality { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; }
 .age-resources {
   display: grid;

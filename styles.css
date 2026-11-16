@@ -10,3 +10,45 @@
 
 .record-content { flex: 1; min-width: 0; overflow-wrap: anywhere; }
 .record-details { white-space: pre-wrap; }
+
+.spell-card { position: relative; }
+.spell-cast-link {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  overflow-wrap: anywhere;
+}
+.spell-cast-link::after { content: ""; position: absolute; inset: 0; border-radius: inherit; }
+.spell-card:has(.spell-cast-link:hover) { border-color: var(--accent); }
+.spell-cast-link:focus-visible::after { outline: 2px solid var(--accent); outline-offset: 2px; }
+.spell-head [data-action="spell-edit"] { position: relative; z-index: 1; flex-shrink: 0; }
+
+.cast-result[hidden] { display: none; }
+#cast-summary p { margin: 6px 0 0; }
+#spell-cast-form .modal-actions { margin-top: 0; }
+
+.quick-dice { margin-top: 18px; }
+.quick-dice-form {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr)) auto;
+  gap: 10px;
+  align-items: end;
+  max-width: 540px;
+}
+.quick-dice-result {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 10px;
+  overflow-wrap: anywhere;
+}
+.quick-dice-result:not(:empty) { margin-top: 9px; }
+.quick-dice-result strong { color: var(--accent); font-size: 20px; }
+
+@media (max-width: 440px) {
+  .quick-dice-form { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .quick-dice-form button { grid-column: 1 / -1; }
+}
