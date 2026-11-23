@@ -1,2 +1,32 @@
-const CACHE='arcanum-dw2-v3-navigation-ages-2';const ASSETS=['./','./index.html','./styles.css','./alwyn.css','./app.js','./rules-data.js','./drive-config.js','./drive-sync.js','./privacy.html','./icon.svg','./manifest.webmanifest'];self.addEventListener('install',e=>{e.waitUntil(caches.open(CACHE).then(c=>c.addAll(ASSETS)).then(()=>self.skipWaiting()))});self.addEventListener('activate',e=>{e.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(k=>k.startsWith('arcanum-')&&k!==CACHE).map(k=>caches.delete(k)))).then(()=>self.clients.claim()))});self.addEventListener('fetch',e=>{if(e.request.method!=='GET'||new URL(e.request.url).origin!==self.location.origin)return;e.respondWith(caches.match(e.request).then(c=>c||fetch(e.request).then(res=>{if(res.ok){const clone=res.clone();caches.open(CACHE).then(cache=>cache.put(e.request,clone));}return res;})))});
+const CACHE = 'arcanum-dw2-navigation-3';
+const RELEASE = '20261123-3';
+const ASSETS = ['./', './index.html', './privacy.html', './icon.svg', './manifest.webmanifest',
+  ...['styles.css', 'alwyn.css', 'app.js', 'rules-data.js', 'drive-config.js', 'drive-sync.js'].map(path => './' + path + '?v=' + RELEASE)];
 
+self.addEventListener('install', event => {
+  event.waitUntil(caches.open(CACHE)
+    .then(cache => cache.addAll(ASSETS.map(url => new Request(url, {cache:'reload'}))))
+    .then(() => self.skipWaiting()));
+});
+self.addEventListener('activate', event => {
+  event.waitUntil(caches.keys()
+    .then(keys => Promise.all(keys.filter(key => key.startsWith('arcanum-') && key !== CACHE).map(key => caches.delete(key))))
+    .then(() => self.clients.claim()));
+});
+self.addEventListener('fetch', event => {
+  if (event.request.method !== 'GET' || new URL(event.request.url).origin !== self.location.origin) return;
+  const cacheResponse = response => {
+    if (response.ok) {
+      const copy = response.clone();
+      event.waitUntil(caches.open(CACHE).then(cache => cache.put(event.request, copy)));
+    }
+    return response;
+  };
+  if (event.request.mode === 'navigate') {
+    event.respondWith(fetch(new Request(event.request, {cache:'no-cache'}))
+      .then(cacheResponse)
+      .catch(async () => (await caches.match(event.request)) || (await caches.match('./index.html'))));
+    return;
+  }
+  event.respondWith(caches.match(event.request).then(cached => cached || fetch(event.request).then(cacheResponse)));
+});
