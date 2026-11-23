@@ -1,6 +1,8 @@
 /* Arcanum: offline-first DW2 Beta v3 Wizard keeper with optional Drive sync. */
 (()=>{'use strict';
 const STORAGE='arcanum_dw2_v3_v1';
+const REFERENCE = window.ARCANUM_RULES || {};
+const CLASS_RULES = REFERENCE.RULES || {Wizard:{name:'Wizard',hp:6,startingDescription:'Prepare three schools and weave the arcane.',paths:[]}};
 const SCHOOLS=[
 {id:'Abjuration',sub:'Magic itself',verbs:['Temporarily disable','Protect from'],desc:'Wards, suppression and protection'},
 {id:'Conjuration',sub:'Objects or outsiders',verbs:['Briefly create','Momentarily summon'],desc:'Temporary objects and summoned outsiders'},
@@ -41,7 +43,17 @@ const STARTER_SPELLS=[
 ];
 const FOCI=[{id:'skull',name:'Bejeweled skull cap',desc:'+1 Armor'},{id:'grimoire',name:'Delicate grimoire',desc:'Once per session, prepare a school instantly'},{id:'staff',name:'Unwieldy staff',desc:'1d6 damage, #close #hand #two-handed'}];
 const EQUIPMENT=[{id:'gear',name:'Adventuring gear',max:3,desc:'Mark a use for a useful mundane item'},{id:'books',name:'Bag of books',max:3,desc:'Mark a use to find useful information'},{id:'dagger',name:'Razor dagger',max:0,desc:'1d4 damage, #precise #piercing #thrown'},{id:'potion',name:'Potion of healing',max:1,desc:'Heal half max HP or clear a locked Condition'},{id:'provisions',name:'Provisions',max:3,desc:'Mark once while you Comfort or Support'}];
-const NAV=[{id:'sheet',label:'Sheet',icon:'user'},{id:'magic',label:'Magic',icon:'sparkles'},{id:'paths',label:'Paths',icon:'layers'},{id:'play',label:'Play',icon:'dice'},{id:'notes',label:'Notes',icon:'book'}];
+const NAV=[
+  {id:'sheet',label:'Sheet',icon:'user'},
+  {id:'play',label:'Play tools',icon:'dice'},
+  {id:'magic',label:'Spellbook',icon:'sparkles'},
+  {id:'paths',label:'Paths & growth',icon:'layers'},
+  {id:'equipment',label:'Equipment',icon:'shield'},
+  {id:'notes',label:'Campaign journal',icon:'book'},
+  {id:'rules',label:'Rules & reference',icon:'book'},
+  {id:'characters',label:'Character library',icon:'user'},
+  {id:'saves',label:'App & saves',icon:'save'}
+];
 const SYMBOLS={
 'user':'<path d="M20 21a8 8 0 0 0-16 0"/><circle cx="12" cy="8" r="4"/>',
 'sparkles':'<path d="m12 3 1.9 6.1L20 11l-6.1 1.9L12 19l-1.9-6.1L4 11l6.1-1.9z"/><path d="m19 19 1 2 1-2 2-1-2-1-1-2-1 2-2 1z"/>',
@@ -73,7 +85,7 @@ const ico=(name,cls='')=>`<svg class="${cls}" viewBox="0 0 24 24" width="18" hei
 const esc=v=>String(v??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
 const uid=()=>('c'+Date.now().toString(36)+Math.random().toString(36).slice(2,8));
 const clamp=(x,min,max)=>Math.max(min,Math.min(max,x));
-function fresh(name='Unnamed Wizard') {return {id:uid(),name,pronouns:'',player:'',level:2,stats:{STR:-1,DEX:1,INT:2,WIS:0,CHA:0},hp:7,hpBonus:0,armorBonus:0,xp:0,conditions:{Angry:'clear',Distracted:'clear',Exhausted:'clear',Frightened:'clear',Insecure:'clear'},origins:{ancestry:'',community:'',background:'',look:'',portrait:''},relationships:[],prepared:['Abjuration','Conjuration','Evocation'],forgotten:[],paths:['Illusionist'],moves:[],focus:'skull',equipment:['gear','potion'],used:{gear:0,books:0,potion:0,provisions:0,grimoire:0},wealth:'Modest',treasure:0,spells:STARTER_SPELLS.map(x=>({...x,id:uid(),example:true})),notes:'',inventory:[],journalEntries:[],backstory:{},sessionNotes:'',advancements:[],createdAt:Date.now(),updatedAt:Date.now()};}
+function fresh(name='Unnamed Wizard') {return {id:uid(),name,pronouns:'',player:'',level:2,stats:{STR:-1,DEX:1,INT:2,WIS:0,CHA:0},hp:7,hpBonus:0,armorBonus:0,xp:0,className:'Wizard',permanentConditions:[],conditions:{Angry:'clear',Distracted:'clear',Exhausted:'clear',Frightened:'clear',Insecure:'clear'},origins:{ancestry:'',community:'',background:'',look:'',portrait:''},relationships:[],prepared:['Abjuration','Conjuration','Evocation'],forgotten:[],paths:['Illusionist'],moves:[],focus:'skull',equipment:['gear','potion'],used:{gear:0,books:0,potion:0,provisions:0,grimoire:0},wealth:'Modest',treasure:0,spells:STARTER_SPELLS.map(x=>({...x,id:uid(),example:true})),notes:'',inventory:[],journalEntries:[],backstory:{},sessionNotes:'',advancements:[],createdAt:Date.now(),updatedAt:Date.now()};}
 let volatile=false;
 let db;
 try{const raw=localStorage.getItem(STORAGE);db=raw?JSON.parse(raw):{version:1,activeId:null,characters:[],theme:'dark'};if(!db||!Array.isArray(db.characters))throw Error('Invalid backup');}catch(e){db={version:1,activeId:null,characters:[],theme:'dark'};volatile=true;}
@@ -86,6 +98,7 @@ let libraryTrigger;
 let libraryReturn;
 let hideUnavailable = false;
 let weaponDamage = {formula: '', mode: 'normal', result: null};
+let playDamage = {}, playSpellId = '', rulesCategory = 'All', rulesSearch = '', pathClassFilter = 'All';
 const spellCategories = ['Defense', 'Mobility', 'Control', 'Attack', 'Utility', 'Other'];
 const diceSides = [3, 4, 6, 8, 10, 12, 20, 100];
 const moveStats = {cast: 'INT', melee: 'STR', ranged: 'DEX', dodge: 'DEX', outsmart: 'INT', sneak: 'DEX', wis: 'WIS', cha: 'CHA'};
@@ -95,7 +108,7 @@ const ages = [
   {id: 'noble', name: 'The Noble', years: '25–30', style: 'Grand Illusionist', stat: 'CHA', schools: ['Illusion', 'Enchantment', 'Evocation']},
   {id: 'sage', name: 'The Sage', years: '60–70', style: 'Immovable Archmage', stat: 'WIS', schools: ['Illusion', 'Divination', 'Abjuration']},
 ];
-const ageFields = ['name', 'stats', 'origins', 'prepared', 'paths', 'moves', 'spells', 'notes', 'backstory', 'sessionNotes', 'advancements'];
+const ageFields = ['name', 'stats', 'origins', 'prepared', 'paths', 'moves', 'conditions', 'permanentConditions', 'forgotten', 'notes', 'backstory', 'sessionNotes', 'advancements', 'advancementNotes'];
 const activeAge = () => ages.find(age => age.id === db.age) || ages[0];
 function characterName(c) {
   if (!c.alwyn) return c.name || 'Unnamed Wizard';
@@ -126,7 +139,7 @@ function current() {
 }
 
 if (currentCharacter().alwyn) screen = 'alwyn';
-const pageTitles={alwyn:'Alwyn overview',sheet:'Character sheet',magic:'Spellbook',paths:'Paths & growth',play:'Play tools',notes:'Journal & backups'};
+const pageTitles={alwyn:'Alwyn overview',sheet:'Character sheet',magic:'Spellbook',paths:'Paths & growth',play:'Play tools',notes:'Campaign journal',equipment:'Equipment & inventory',rules:'Rules & reference',characters:'Character library',saves:'App & saves'};
 function driveCharacters() {
   return db.characters.map(({updatedAt, ...character}) => character);
 }
@@ -178,7 +191,7 @@ const driveSync = window.createArcanumDriveSync?.({
   },
   apply(characters, link) {
     const wasGrouped = Boolean(currentCharacter().alwyn);
-    db.characters = characters;
+    db.characters = characters.map(migrateCharacter);
     db.drive = link;
     if (!characters.some(character => character.id === db.activeId)) db.activeId = characters[0].id;
     if (!wasGrouped && currentCharacter().alwyn) screen = 'alwyn';
@@ -193,17 +206,21 @@ const save=()=>{clearTimeout(saveTimer);saveTimer=null;current().updatedAt=Date.
 const scheduleSave=()=>{updateStatus('Saving…');clearTimeout(saveTimer);saveTimer=setTimeout(save,360)};
 function updateStatus(t){const e=document.getElementById('save-status');if(e)e.textContent=t;}
 function toast(t){const el=document.getElementById('toast');el.textContent=t;el.classList.add('show');clearTimeout(toastTimer);toastTimer=setTimeout(()=>el.classList.remove('show'),3500)}
-const maxHp=c=>Math.max(1,6+Math.min(10,Math.max(0,(Number(c.level)||1)-1))+(Number(c.hpBonus)||0));
+const maxHp=c=>Math.max(1,(CLASS_RULES[c.className || 'Wizard']?.hp || 6)+Math.min(10,Math.max(0,(Number(c.level)||1)-1))+(Number(c.hpBonus)||0));
 const armor=c=>(c.focus==='skull'?1:0)+(Number(c.armorBonus)||0);
 const hasPath=(c,id)=>c.paths.includes(id);
 const bonusSchools=c=>PATHS.filter(p=>hasPath(c,p.id)).map(p=>p.school);
 const allPrepared=c=>[...new Set([...c.prepared,...bonusSchools(c)])].filter(id=>!c.forgotten.includes(id));
-const availableVerbs=c=>[...new Set(SCHOOLS.filter(s=>allPrepared(c).includes(s.id)).flatMap(s=>[...s.verbs,...(PATHS.find(p=>p.school===s.id&&hasPath(c,p.id))?.extra||[])]))];
+const availableVerbs=c=>[...new Set(SCHOOLS.filter(s=>allPrepared(c).includes(s.id)).flatMap(s=>[...s.verbs,...((c.className || 'Wizard') === 'Wizard' ? PATHS.find(p=>p.school===s.id&&hasPath(c,p.id))?.extra||[] : [])]))];
 const availableSubs=c=>SCHOOLS.filter(s=>allPrepared(c).includes(s.id)).map(s=>s.sub);
 const conditionStat=c=>Object.fromEntries(CONDITIONS.map(x=>[x.stat,c.conditions[x.name]!== 'clear']));
 const conditionCount=c=>Object.values(c.conditions).filter(v=>v==='marked'||v==='locked').length;
 const fmtSign=n=>n>0?'+'+n:String(n);
-function renderNav(){document.getElementById('nav-desktop').innerHTML=NAV.map(n=>`<button class="nav-item ${screen===n.id?'active':''}" data-action="nav" data-screen="${n.id}">${ico(n.icon)}<span>${n.label==='Sheet'?(currentCharacter().alwyn?'Sheet':'Overview'):n.label==='Magic'?'Spellbook':n.label==='Play'?'Play tools':n.label}</span></button>`).join('');document.getElementById('nav-mobile').innerHTML=NAV.map(n=>`<button class="mobile-tab ${screen===n.id?'active':''}" data-action="nav" data-screen="${n.id}" aria-current="${screen===n.id?'page':'false'}">${ico(n.icon)}<span>${n.label}</span></button>`).join('');}
+function renderNav() {
+  const button = (entry, mobile = false) => `<button class="${mobile ? 'mobile-tab' : 'nav-item'} ${screen === entry.id ? 'active' : ''}" data-action="nav" data-screen="${entry.id}" aria-current="${screen === entry.id ? 'page' : 'false'}">${ico(entry.icon)}<span>${entry.label}</span></button>`;
+  document.getElementById('nav-desktop').innerHTML = NAV.map(entry => button(entry)).join('');
+  document.getElementById('nav-mobile').innerHTML = NAV.slice(0,4).map(entry => button(entry,true)).join('') + `<button class="mobile-tab ${NAV.slice(4).some(entry => entry.id === screen) ? 'active' : ''}" data-action="more-nav" aria-haspopup="dialog">${ico('layers')}<span>More</span></button>`;
+}
 function render() {
   const root = currentCharacter();
   if (screen === 'alwyn' && !root.alwyn) screen = 'sheet';
@@ -215,10 +232,10 @@ function render() {
   renderNav();
   const target = document.getElementById('screen');
   target.dataset.age = root.alwyn && screen !== 'alwyn' ? activeAge().id : '';
-  const pages = {alwyn: renderAlwyn, sheet: renderSheet, magic: renderMagic, paths: renderPaths, play: renderPlay, notes: renderNotes};
+  const pages = {alwyn: renderAlwyn, sheet: renderSheet, magic: renderMagic, paths: renderClassPaths, play: renderPlay, notes: renderNotes, equipment:renderEquipment, rules:renderRules, characters:renderCharacterLibrary, saves:renderSaves};
   target.innerHTML = (root.alwyn ? renderAgeNav() : '') + pages[screen]();
 }
-const pagehead=(title,desc,actions='')=>`<div class="pagehead"><div><div class="eyebrow">DW2 BETA V3 · WIZARD</div><h1>${title}</h1><p>${desc}</p></div>${actions}</div>`;
+const pagehead=(title,desc,actions='')=>`<div class="pagehead"><div><div class="eyebrow">DW2 BETA V3 · ${esc(current().className || 'Wizard')}</div><h1>${title}</h1><p>${desc}</p></div>${actions}</div>`;
 const field=(label,path,v,placeholder='',type='text')=>`<label class="input-wrap"><span class="field-label">${label}</span><input class="input" data-bind="${path}" type="${type}" placeholder="${esc(placeholder)}" value="${esc(v)}" ${type==='number'?'step="1"':''}/></label>`;
 const select=(label,path,val,options)=>`<label class="input-wrap"><span class="field-label">${label}</span><select data-bind="${path}">${options.map(o=>{const value=typeof o==='object'?o.id:o,label=typeof o==='object'?o.name:o;return `<option value="${esc(value)}" ${val===value?'selected':''}>${esc(label)}</option>`}).join('')}</select></label>`;
 const pill=(label,type='')=>`<span class="pill ${type}">${esc(label)}</span>`;
@@ -240,7 +257,7 @@ function renderAlwyn() {
   const root = currentCharacter();
   const {alwyn} = root;
   return pagehead(esc(characterName(root)), 'The Fractured Archmage',
-    `<div class="flex-row overview-actions"><a class="btn" href="#campaign-journal">${ico('book')} Campaign journal</a>
+    `<div class="flex-row overview-actions"><button class="btn" data-action="nav" data-screen="notes">${ico('book')} Campaign journal</button>
       <button class="btn" data-action="alwyn-edit">${ico('edit')} Edit profile</button></div>`)
     + `<section class="card age-overview">
       ${alwyn.overview ? `<p class="age-summary">${esc(alwyn.overview)}</p>` : ''}
@@ -248,7 +265,7 @@ function renderAlwyn() {
         <div><dt>Level</dt><dd>${esc(root.level)}</dd></div>
         <div><dt>HP</dt><dd>${esc(root.hp)} / ${maxHp(root)}</dd></div>
         <div><dt>XP</dt><dd>${esc(root.xp)} / 5</dd></div>
-        <div><dt>Conditions</dt><dd>${conditionCount(root) || 'Clear'}</dd></div>
+        <div><dt>${esc(activeAge().name)} Conditions</dt><dd>${conditionCount(current()) || 'Clear'}</dd></div>
       </dl>
     </section>
     ${morningRollCard(alwyn.morningRoll)}
@@ -263,15 +280,12 @@ function renderAlwyn() {
             <div><p class="micro muted">Age ${age.years}</p><h3>${age.name}</h3><p class="small">${age.style}</p></div>
           </div>
           ${alwyn.personality[age.id] ? `<p class="age-personality">${esc(alwyn.personality[age.id])}</p>` : ''}
-          <p class="small muted">${sheet.prepared.length ? esc(sheet.prepared.join(' · ')) : 'No prepared schools'}</p>
+          <p class="small muted">${conditionCount(sheet)} active Conditions</p><p class="small muted">${sheet.prepared.length ? esc(sheet.prepared.join(' · ')) : 'No prepared schools'}</p>
           <button class="btn age-open" data-action="alwyn-age" data-age="${age.id}">Open ${age.name.toLowerCase()} sheet</button>
         </article>`;
       }).join('')}</div>
     </section>
-    <div class="cols-2 age-inventory">
-      <div id="campaign-journal">${recordCard(root, 'journalEntries')}</div>
-      <div>${recordCard(root, 'inventory')}</div>
-    </div>`;
+    <div class="flex-row overview-actions"><button class="btn" data-action="nav" data-screen="equipment">Equipment</button><button class="btn" data-action="nav" data-screen="notes">Campaign journal</button></div>`;
 }
 
 function morningRollCard(value) {
@@ -339,7 +353,7 @@ function createAlwyn(root, selection) {
     const source = db.characters.find(entry => entry.id === id && entry.id !== root.id && !entry.alwyn);
     if (source && mergedIds.has(source.id)) throw new Error('Choose a different sheet for each age.');
     if (source) mergedIds.add(source.id);
-    forms[age.id] = copyAgeFields(source || newAgeSheet(root, age));
+    forms[age.id] = {...copyAgeFields(source || newAgeSheet(root, age)), spells: structuredClone(source?.spells || [])};
   }
 
   const merged = db.characters.filter(entry => mergedIds.has(entry.id));
@@ -359,7 +373,7 @@ function createAlwyn(root, selection) {
   for (const source of merged) {
     for (const rel of source.relationships) relationships.set(JSON.stringify(rel), rel);
     root.equipment = [...new Set([...root.equipment, ...source.equipment])];
-    root.forgotten = [...new Set([...root.forgotten, ...source.forgotten])];
+
     for (const [item, used] of Object.entries(source.used)) {
       root.used[item] = Math.max(root.used[item] || 0, Number(used) || 0);
     }
@@ -378,6 +392,7 @@ function saveAlwynProfile(form) {
     toast(error.message);
     return;
   }
+  migrateCharacter(root);
   root.alwyn.overview = String(data.get('overview') || '').trim().slice(0, 3500);
   root.alwyn.personality = Object.fromEntries(ages.map(age => [age.id, String(data.get(age.id) || '').trim().slice(0, 3500)]));
   if (!db.age) db.age = 'prodigy';
@@ -447,46 +462,257 @@ function cleanRecord(key, record, id) {
 }
 
 function renderSheet(){const c=current(),mx=maxHp(c),count=conditionCount(c),stats=CONDITIONS.reduce((a,x)=>(a[x.stat]=x.name,a),{});return pagehead(c.alwyn ? activeAge().name : 'Your character',c.alwyn ? esc(characterName(currentCharacter())) + ' · Age ' + activeAge().years : 'Your central character sheet. Changes save automatically on this device.',`<button class="btn hide-mobile" data-action="print">${ico('printer')} Print</button>`)+
-`<section class="card hero"><div class="hero-inner"><div class="hero-top"><button class="avatar" data-action="portrait" title="Change character portrait" aria-label="Change character portrait">${c.origins.portrait?`<img src="${esc(c.origins.portrait)}" alt="Character portrait" style="width:100%;height:100%;border-radius:inherit;object-fit:cover"/>`:'✦'}</button><div><h2 class="hero-name">${esc(c.name||'Unnamed Wizard')}</h2><div class="hero-meta">${pill(`Level ${c.level} Wizard`,'accent')}${c.paths.length?c.paths.map(p=>pill(p,'mint')).join(''):pill('No Path acquired')}${pill(`${armor(c)} Armor`)}</div></div></div><div class="hero-controls">${field('Character name','name',c.name,'Your Wizard')}${field('Pronouns','pronouns',c.pronouns,'they/them')}${field('Player name','player',c.player,'Optional')}</div>${c.level<2&&c.paths.length?'<div class="hero-sub">Rules check: Wizard Paths are normally gained through advancements after level 1.</div>':''}</div></section>`+
+`<section class="card hero"><div class="hero-inner"><div class="hero-top"><button class="avatar" data-action="portrait" title="Change character portrait" aria-label="Change character portrait">${c.origins.portrait?`<img src="${esc(c.origins.portrait)}" alt="Character portrait" style="width:100%;height:100%;border-radius:inherit;object-fit:cover"/>`:'✦'}</button><div><h2 class="hero-name">${esc(c.name||'Unnamed Wizard')}</h2><div class="hero-meta">${pill(`Level ${c.level} ${c.className || 'Wizard'}`,'accent')}${c.paths.length?c.paths.map(p=>pill(p,'mint')).join(''):pill('No Path acquired')}${pill(`${armor(c)} Armor`)}</div></div></div><div class="hero-controls">${field('Character name','name',c.name,'Your Wizard')}${field('Pronouns','pronouns',c.pronouns,'they/them')}${field('Player name','player',c.player,'Optional')}</div>${c.level<2&&c.paths.length?'<div class="hero-sub">Rules check: Wizard Paths are normally gained through advancements after level 1.</div>':''}</div></section>`+
 `<div class="cols-2" style="margin-top:18px"><div class="block-stack">
-${ageRoleplay()}
+${ageRoleplay()}${CLASS_RULES[c.className || 'Wizard'] ? infoCard(CLASS_RULES[c.className || 'Wizard'].startingMove || 'Starting move', '<p class="para">' + esc(CLASS_RULES[c.className || 'Wizard'].startingDescription) + '</p>') : ''}
 ${infoCard('Attributes',`<div class="stats-grid">${['STR','DEX','INT','WIS','CHA'].map(stat=>`<div class="stat"><div class="stat-name">${stat}</div><div class="stat-value"><button data-action="stat" data-stat="${stat}" data-delta="-1" aria-label="Decrease ${stat}">−</button><span>${fmtSign(c.stats[stat])}</span><button data-action="stat" data-stat="${stat}" data-delta="1" aria-label="Increase ${stat}">+</button></div>${c.conditions[stats[stat]]!=='clear'?'<div class="stat-penalty">Disadvantage</div>':'<div class="micro subtle">&nbsp;</div>'}</div>`).join('')}</div><div class="footnote" style="margin-top:11px">The level-1 starting spread is +2, +1, 0, 0, −1. Adjust values when you gain stat advancements; allocation is not enforced automatically.</div>`)}
 ${infoCard('Character background',`<div class="field-grid">${field('Ancestry','origins.ancestry',c.origins.ancestry,'Elf, dwarf, human…')}${field('Community','origins.community',c.origins.community,'Arcane academy…')}${field('Background','origins.background',c.origins.background,'Former occupation…')}<label class="input-wrap full"><span class="field-label">Appearance / look</span><textarea data-bind="origins.look" placeholder="Outfit, eyes, markings, focus, demeanor…">${esc(c.origins.look)}</textarea></label></div>`)}
-${infoCard('Equipment & focus',`<div class="field-grid">${select('Arcane focus','focus',c.focus,FOCI)}<div><span class="field-label">Focus benefit</span><div class="alert info">${esc(FOCI.find(f=>f.id===c.focus)?.desc||'')}</div></div><div class="full"><span class="field-label">Equipment (choose two at character creation)</span><div class="group-list">${EQUIPMENT.map(e=>`<div class="group-item"><label style="display:flex;gap:10px;align-items:center;flex:1;cursor:pointer"><input type="checkbox" data-equipment="${e.id}" ${c.equipment.includes(e.id)?'checked':''}/><span><strong>${esc(e.name)}</strong><span class="micro muted" style="display:block">${esc(e.desc)}</span></span></label>${e.max&&c.equipment.includes(e.id)?`<div class="flex-row"><button class="btn tiny" data-action="use" data-item="${e.id}" data-delta="1">Use</button><span class="micro muted">${clamp(c.used[e.id]||0,0,e.max)}/${e.max}</span><button class="btn tiny" data-action="use" data-item="${e.id}" data-delta="-1">↺</button></div>`:''}</div>`).join('')}</div></div></div>`)}
-${recordCard(c, 'inventory')}
 </div><div class="block-stack">
 ${infoCard('Hit points & armor',`<div class="meter-row"><div><div class="field-label">Current HP</div><div class="meter-value">${clamp(c.hp,0,mx)} <span>/ ${mx}</span></div></div><div class="hp-ctrl"><button class="step-btn" data-action="hp" data-delta="-1" aria-label="Lose one HP">−</button><button class="step-btn" data-action="hp" data-delta="1" aria-label="Gain one HP">+</button></div></div><div class="progress"><div class="progress-fill" style="width:${clamp(c.hp/mx*100,0,100)}%"></div></div><div class="flex-spread"><span class="micro muted">Armor: <strong style="color:var(--text)">${armor(c)}</strong></span><span class="micro muted">Max HP: ${mx}</span></div><div class="field-grid" style="margin-top:15px">${field('Extra max HP modifier','hpBonus',c.hpBonus,'0','number')}${field('Extra Armor modifier','armorBonus',c.armorBonus,'0','number')}</div><div class="flex-row" style="margin-top:12px"><button class="btn" data-action="heal-full">${ico('heart')} Full heal</button><button class="btn" data-action="make-camp">${ico('refresh')} Make Camp</button></div>`)}
-${infoCard('Conditions',`<p class="para small">Marked or locked Conditions give disadvantage on their corresponding Stat rolls.</p><div class="condition-list">${CONDITIONS.map(k=>`<div class="condition ${c.conditions[k.name]}"><div class="condition-top"><span class="condition-name">${k.name}</span>${pill(k.stat,'')}</div><div class="condition-sub">${k.desc}</div><div class="condition-actions">${['clear','marked','locked'].map(state=>`<button class="choice-btn ${c.conditions[k.name]===state?'selected':''} ${state==='locked'?'lock':''}" data-action="condition" data-condition="${k.name}" data-state="${state}">${state==='clear'?'Clear':state==='marked'?'Mark':'Lock'}</button>`).join('')}</div></div>`).join('')}</div><div style="margin-top:12px" class="flex-spread">${pill(`${count} / 5 active`,count>=4?'danger':'amber')}<button class="btn tiny" data-action="reach-limit" ${count<5?'disabled':''}>Reach Your Limit</button></div>${count>=4?'<div class="alert danger" style="margin-top:12px">You are close to reaching your limit. At five active Conditions, resolve Reach Your Limit.</div>':''}`)}
+${conditionsPanel(c)}
 ${infoCard('Experience & level',`<div class="flex-spread"><div><div class="field-label">Level</div><div class="meter-value">${c.level}</div></div><div class="hp-ctrl"><button class="step-btn" data-action="level" data-delta="-1">−</button><button class="step-btn" data-action="level" data-delta="1">+</button></div></div><div class="separator"></div><div class="field-label">XP · Five XP to level up</div><div class="pips">${[1,2,3,4,5].map(i=>`<button class="pip ${c.xp>=i?'filled':''}" data-action="xp" data-value="${i}" aria-label="Set XP to ${i}">${c.xp>=i?'✦':'·'}</button>`).join('')}</div><div class="flex-row" style="margin-top:14px"><button class="btn tiny" data-action="xp-minus">−1 XP</button><button class="btn tiny" data-action="xp-plus">+1 XP</button><div class="spacer"></div>${c.xp>=5?`<button class="btn primary tiny" data-action="level-up">Level up</button>`:''}</div><div class="footnote" style="margin-top:14px">Leveling increases maximum and current HP by 1 (up to +10 from levels), resets XP, and gives one Advancement to choose. Track advancements on Paths.</div>`)}
 </div></div>`;
 }
 function schoolBlock(s,c){const owned=bonusSchools(c).includes(s.id),active=allPrepared(c).includes(s.id),checked=c.prepared.includes(s.id),forgotten=c.forgotten.includes(s.id),availability=owned?'Path bonus':checked?'Prepared':'Not prepared';const ext=PATHS.find(p=>p.school===s.id&&hasPath(c,p.id));return `<div class="group-item"><label class="school-card ${active?'active':''} ${owned?'disabled':''}" style="flex:1"><input hidden type="checkbox" data-school="${s.id}" ${checked||owned?'checked':''} ${owned?'disabled':''}/><div class="school-check">✓</div><div><div class="school-name">${s.id} ${owned?pill('Path bonus','accent'):''}</div><div class="school-desc">Substance: ${esc(s.sub)}</div><div class="school-verbs">Verbs: ${esc([...s.verbs,...(ext?.extra||[])].join(' · '))}</div>${forgotten?'<div class="school-lock">Forgotten until Make Camp</div>':''}</div></label>${forgotten?`<button class="btn tiny" data-action="remember" data-school="${s.id}">Restore</button>`:active?`<button class="btn tiny" data-action="forget" data-school="${s.id}">Forget</button>`:pill(availability)}</div>`}
-function renderMagic(){const c=current();return pagehead('Shape the impossible','Create custom spells from prepared-school verbs and substances. Your concepts save to your spellbook.',`<button class="btn primary" data-action="spell-new">${ico('plus')} New spell</button>`)+`<div class="cols-2"><div class="block-stack">${infoCard('Prepared schools',`<div class="flex-spread" style="margin-bottom:13px"><span class="small muted">Choose up to 3 standard schools. Your owned Paths add bonus prepared schools.</span>${pill(`${c.prepared.length}/3 normal`,'accent')}</div><div class="group-list">${SCHOOLS.map(s=>schoolBlock(s,c)).join('')}</div><div class="flex-row" style="margin-top:13px"><button class="btn tiny" data-action="make-camp">${ico('refresh')} Make Camp</button><span class="micro muted">Changing schools normally happens when you Make Camp.</span></div>`)}
+function renderMagic(){const c=current();return pagehead('Shape the impossible','Create custom spells from prepared-school verbs and substances. Your concepts save to your spellbook.',`<button class="btn primary" data-action="spell-new">${ico('plus')} New spell</button>`)+`<div class="cols-2 magic-layout"><div class="block-stack">${infoCard('Prepared schools',`<div class="flex-spread" style="margin-bottom:13px"><span class="small muted">Choose up to 3 standard schools. Your owned Paths add bonus prepared schools.</span>${pill(`${c.prepared.length}/3 normal`,'accent')}</div><div class="group-list">${SCHOOLS.map(s=>schoolBlock(s,c)).join('')}</div><div class="flex-row" style="margin-top:13px"><button class="btn tiny" data-action="make-camp">${ico('refresh')} Make Camp</button><span class="micro muted">Changing schools normally happens when you Make Camp.</span></div>`)}
 ${infoCard('Available combinations',`<div class="cols-3" style="grid-template-columns:repeat(3,1fr);gap:9px"><div class="stat" style="padding:13px 4px"><div class="stat-name">Verbs</div><div class="stat-value">${availableVerbs(c).length}</div></div><div class="stat" style="padding:13px 4px"><div class="stat-name">Substances</div><div class="stat-value">${availableSubs(c).length}</div></div><div class="stat" style="padding:13px 4px"><div class="stat-name">Pairings</div><div class="stat-value">${availableVerbs(c).length*availableSubs(c).length}</div></div></div><div class="separator"></div><p class="small muted">All pairings are concepts, not automatically permitted spells. The GM approves feasibility, range, duration, and Magnitude.</p><button class="btn btn-wide" data-action="spell-new">${ico('sparkles')} Open spell builder</button>`)}
 </div><div class="block-stack"><section class="card spellbook-panel">
   <div class="card-title spellbook-header"><h2>Spellbook</h2>
     <button class="btn tiny" data-action="spell-library" aria-haspopup="dialog">Expand spellbook</button></div>
-  ${renderSpellList(c)}
+  <div class="spellbook-scroll" tabindex="0" role="region" aria-label="Saved spells">${renderSpellList(c)}</div>
 </section>
-</div></div>${quickDiceCard()}`;}
+</div></div>`;}
 function renderPaths(){const c=current();return pagehead('Path of the arcane','Acquire Paths, unlock verbs, and track individual Path Moves as you level up.')+`<div class="cols-2"><div class="block-stack">${infoCard('Your advancement plan',`<div class="flex-spread"><div><div class="field-label">Current level</div><div class="meter-value">${c.level}</div></div>${pill(`${c.paths.length} Paths owned`,'accent')}</div><div class="separator"></div><p class="small muted">Gaining a Path grants only its Starting Move. Other Path Moves require separate advancements. Your first Path is normally gained by leveling up from level 1.</p><label class="field-label" for="advances">Advancement history / choices</label><textarea id="advances" data-bind="advancementNotes" placeholder="Level 2 — Illusionist Path\nLevel 3 — Mirror Image…">${esc(c.advancementNotes||'')}</textarea>`)}
 ${infoCard('Spellcasting rules',`<p class="small muted">Prepare 3 schools. An owned Path’s school can be prepared in addition to the normal three. Cast a Spell uses +INT and the GM sets the spell’s Magnitude.</p><div class="group-list"><div class="group-item"><span>MAG below INT</span>${pill('Normal roll','mint')}</div><div class="group-item"><span>MAG equal to INT</span>${pill('Disadvantage','amber')}</div><div class="group-item"><span>MAG above INT</span>${pill('Too powerful','danger')}</div></div><div class="separator"></div><p class="footnote">For a 7–9, your Wizard may mark a Condition, accept a GM twist, or forget a prepared school until Make Camp. Casting requires your focus, both hands otherwise free, and the ability to speak aloud.</p>`)}
 </div><div class="block-stack">${PATHS.map(p=>`<section class="path-panel"><div class="path-panel-head"><div><h3>${p.id}</h3><div class="small muted">${esc(p.tag)}</div></div><button class="btn ${hasPath(c,p.id)?'primary':''}" data-action="path" data-path="${p.id}">${hasPath(c,p.id)?ico('check')+' Acquired':'Acquire'}</button></div><div class="separator"></div><div class="pillbar">${pill(p.school,'accent')}${p.extra.map(s=>pill(s)).join('')}</div><p class="small muted" style="margin-top:12px"><strong style="color:var(--text)">${esc(p.starting)}:</strong> ${esc(p.startingDesc)}</p><div style="margin-top:17px"><div class="field-label">Path Moves — gained separately</div>${p.moves.map(m=>`<div class="path-move"><div class="path-move-head"><strong>${esc(m.id)}</strong><button class="btn tiny ${c.moves.includes(m.id)?'primary':''}" data-action="move" data-move="${esc(m.id)}" data-path="${p.id}" ${!hasPath(c,p.id)?'disabled':''}>${c.moves.includes(m.id)?'Learned':'Learn'}</button></div><p>${esc(m.desc)}</p></div>`).join('')}</div></section>`).join('')}</div></div>`;}
 function renderPlay(){const c=current();const modes=[{id:'cast',label:'Cast a Spell',stat:'INT',hint:'Wizard spellcasting: GM assigns Magnitude. Equal to INT means disadvantage.'},{id:'melee',label:'Trade Blows · melee',stat:'STR',hint:'Weapon exchange in melee, usually dealing and suffering damage.'},{id:'ranged',label:'Trade Blows · ranged',stat:'DEX',hint:'Physical ranged attacks, not normally Wizard spell projectiles.'},{id:'dodge',label:'Defy Danger · dodge',stat:'DEX',hint:'Dodging, escaping, or outpacing a danger.'},{id:'outsmart',label:'Defy Danger · outsmart',stat:'INT',hint:'Analyzing or outsmarting a danger.'},{id:'sneak',label:'Sneak Past',stat:'DEX',hint:'Stealthily evade notice.'},{id:'wis',label:'Defy Danger · resist',stat:'WIS',hint:'Resist or scrutinize a danger.'},{id:'cha',label:'Defy Danger · trick',stat:'CHA',hint:'Charm, trick, impress, or provoke a danger.'}];const mode=modes.find(m=>m.id===diceMode)||modes[0],{condition:penalty,atLimit,tooHigh}=playRollSpec();return pagehead('At the table','Fast tools for combat, checks, session upkeep, and Conditions.')+`<div class="cols-2"><div class="block-stack">${infoCard('Dice roller',`${select('Move','__diceMode',diceMode,modes.map(m=>({id:m.id,name:m.label})))}<div class="small muted" style="margin:8px 0 14px">${esc(mode.label)} · ${esc(mode.hint)}</div><div class="field-grid">${mode.id==='cast'?`<label><span class="field-label">Spell magnitude</span><select id="dice-mag">${['0','1','2','3','4','?'].map(v=>`<option ${v===diceMag?'selected':''} value="${v}">${v==='?'?'GM to decide':v}</option>`).join('')}</select></label>`:''}<label><span class="field-label">Roll modifier</span><select id="dice-extra">${['normal','advantage','disadvantage'].map(v=>`<option value="${v}" ${diceExtra===v?'selected':''}>${v[0].toUpperCase()+v.slice(1)}</option>`).join('')}</select></label></div><div class="dice-area" style="margin-top:16px">${diceLast?rollResult(diceLast):`<div style="font-size:36px;color:var(--accent)">✦</div><div class="dice-result">—</div><div class="dice-minor">2d6 + ${mode.stat} (${fmtSign(c.stats[mode.stat])})</div>`}<button class="btn primary btn-wide" style="margin-top:15px" data-action="roll" ${tooHigh?'disabled':''}>${ico('dice')} ${tooHigh?'MAG beyond INT — ritual needed':'Roll dice'}</button></div>${penalty?`<div class="alert" style="margin-top:12px">${penalty.name} imposes disadvantage on ${mode.stat} rolls.</div>`:''}${atLimit?'<div class="alert" style="margin-top:12px">MAG equals casting stat: roll with disadvantage.</div>':''}<div class="footnote" style="margin-top:15px">On 10+ you generally succeed; 7–9 succeeds with complications; 6− creates trouble and normally awards 1 XP. Move-specific rules control the exact result. Dice rolls are not permanently saved.</div>`)}
+${mode.id === 'cast' ? playSpellDamage() : ''}
 ${['melee', 'ranged'].includes(mode.id) ? infoCard('Weapon damage', damageRoller('weapon-damage-form', weaponDamage)) : ''}
 ${infoCard('Move reference',`<div class="group-list"><div class="group-item" style="display:block"><strong>Cast a Spell +INT</strong><div class="small muted">10+: effect works · 7–9: effect works with Condition, GM twist or forget a school · 6−: trouble +1 XP.</div></div><div class="group-item" style="display:block"><strong>Trade Blows +STR/+DEX</strong><div class="small muted">Typically exchange damage. On 10+ gain a benefit; on 7–9 accept complication; on 6− choose minimum dealt or maximum suffered.</div></div><div class="group-item" style="display:block"><strong>Defy Danger +appropriate stat</strong><div class="small muted">10+: overcome obstacle · 7–9: succeed with drawback · 6−: things go wrong.</div></div><div class="group-item" style="display:block"><strong>Mirror Image · Illusionist Move</strong><div class="small muted">If learned, mark a Condition when taking damage to prevent all of it and reveal a #near position.</div></div></div>`)}
-</div><div class="block-stack">${infoCard('Quick combat tracker',`<div class="meter-row"><div><div class="field-label">Current HP</div><div class="meter-value">${c.hp}<span> / ${maxHp(c)}</span></div></div><div class="hp-ctrl"><button class="step-btn" data-action="hp" data-delta="-1">−</button><button class="step-btn" data-action="hp" data-delta="1">+</button><button class="btn" data-action="heal-full">Full heal</button></div></div><div class="separator"></div><div class="field-label">Conditions</div>${CONDITIONS.map(x=>`<div class="group-item" style="margin-top:7px"><div><strong>${x.name}</strong><div class="micro muted">${x.stat} disadvantage</div></div><div class="flex-row">${pill(c.conditions[x.name],c.conditions[x.name]==='locked'?'danger':c.conditions[x.name]==='marked'?'amber':'mint')}<button class="btn tiny" data-action="cycle-condition" data-condition="${x.name}">Change</button></div></div>`).join('')}<button class="btn btn-wide" style="margin-top:15px" data-action="make-camp">${ico('refresh')} Make Camp</button>`)}
+</div><div class="block-stack">${infoCard('Quick combat tracker',`<div class="meter-row"><div><div class="field-label">Current HP</div><div class="meter-value">${c.hp}<span> / ${maxHp(c)}</span></div></div><div class="hp-ctrl"><button class="step-btn" data-action="hp" data-delta="-1">−</button><button class="step-btn" data-action="hp" data-delta="1">+</button><button class="btn" data-action="heal-full">Full heal</button></div></div><div class="separator"></div><button class="btn btn-wide" style="margin-top:15px" data-action="make-camp">${ico('refresh')} Make Camp</button>`)}
+${conditionsPanel(c)}
 ${infoCard('Spellcasting checklist',`<div class="group-list"><div class="group-item">${ico('check-circle')} Arcane focus available</div><div class="group-item">${ico('check-circle')} Both hands otherwise free</div><div class="group-item">${ico('check-circle')} Able to speak aloud</div><div class="group-item">${ico('check-circle')} Verb + substance from currently available schools</div></div><p class="footnote" style="margin-top:14px">For your mobility/illusion build, remember that ranged spell attacks use Cast a Spell +INT, while a physical bow uses Trade Blows +DEX.</p>`)}
 </div></div>`;}
-function renderNotes(){const c=current();return pagehead('Journal & safekeeping','Keep campaign notes, relationships, and backups of every character you create.')+`<div class="cols-2"><div class="block-stack">${backstoryCard(c)}
-${recordCard(c, 'journalEntries')}
-${c.alwyn && c.notes ? infoCard('Earlier notes for this age', `<label><span class="field-label">${activeAge().name}</span><textarea data-bind="notes">${esc(c.notes)}</textarea></label>`) : ''}
+// Alwyn's shared library and independent age state, migrated once from earlier saves.
+function migrateCharacter(character) {
+  character.className = CLASS_RULES[character.className] ? character.className : 'Wizard';
+  character.permanentConditions = validPermanent(character.permanentConditions);
+  if (character.alwyn && character.alwyn.schemaVersion !== 2) {
+    const spells = [], seen = new Set(), ids = new Set();
+    for (const sheet of [character, ...Object.values(character.alwyn.forms || {})]) {
+      for (const spell of sheet.spells || []) {
+        const fingerprint = JSON.stringify(Object.fromEntries(Object.entries(spell).filter(([key]) => !['id', 'example'].includes(key)).sort(([a], [b]) => a.localeCompare(b))));
+        if (seen.has(fingerprint)) continue;
+        seen.add(fingerprint);
+        const entry = structuredClone(spell);
+        if (!entry.id || ids.has(entry.id)) entry.id = uid();
+        ids.add(entry.id);
+        spells.push(entry);
+      }
+      sheet.conditions = {...character.conditions, ...sheet.conditions};
+      sheet.permanentConditions = validPermanent(sheet.permanentConditions);
+      sheet.forgotten = Array.isArray(sheet.forgotten) ? sheet.forgotten : [...(character.forgotten || [])];
+    }
+    character.spells = spells;
+    for (const form of Object.values(character.alwyn.forms || {})) delete form.spells;
+    character.alwyn.schemaVersion = 2;
+  }
+  for (const sheet of [character, ...Object.values(character.alwyn?.forms || {})]) {
+    sheet.conditions = Object.fromEntries(CONDITIONS.map(({name}) => [name, ['clear', 'marked', 'locked'].includes(sheet.conditions?.[name]) ? sheet.conditions[name] : 'clear']));
+    sheet.permanentConditions = validPermanent(sheet.permanentConditions);
+    for (const name of sheet.permanentConditions) sheet.conditions[name] = 'locked';
+  }
+  return character;
+}
+
+function validPermanent(value) {
+  return [...new Set(Array.isArray(value) ? value.filter(name => CONDITIONS.some(condition => condition.name === name)) : [])];
+}
+
+function conditionsPanel(c) {
+  return infoCard('Conditions', `<p class="small muted">${c.alwyn ? esc(activeAge().name) + ' only. ' : ''}Marked, locked, and permanent Conditions impose disadvantage on their associated stat.</p>
+    <div class="condition-list">${CONDITIONS.map(condition => {
+      const fixed = c.permanentConditions?.includes(condition.name);
+      return `<div class="condition ${c.conditions[condition.name]}"><div class="condition-top"><strong>${condition.name}</strong>${pill(fixed ? 'Permanent' : condition.stat, fixed ? 'danger' : '')}</div>
+        <p class="condition-sub">${condition.desc}</p><div class="condition-actions">${['clear', 'marked', 'locked'].map(state =>
+          `<button class="choice-btn ${c.conditions[condition.name] === state ? 'selected' : ''}" data-action="condition" data-condition="${condition.name}" data-state="${state}" ${fixed ? 'disabled' : ''}>${state === 'clear' ? 'Clear' : state === 'marked' ? 'Mark' : 'Lock'}</button>`).join('')}</div></div>`;
+    }).join('')}</div><div class="flex-row" style="margin-top:14px">${pill(`${conditionCount(c)} / 5 active`)}
+      <button class="btn tiny" data-action="permanent-conditions">Permanent conditions</button>
+      <button class="btn tiny" data-action="reach-limit" ${conditionCount(c) < 5 ? 'disabled' : ''}>Reach Your Limit</button></div>`);
+}
+
+function permanentConditionsModal() {
+  const c = current();
+  modal('Permanent conditions', `<form id="permanent-conditions-form" class="block-stack"><p class="small muted">${c.alwyn ? esc(activeAge().name) + ' only. ' : ''}Choose the Conditions your GM made permanent. They remain active through camp and outbursts. Unchecking makes a Condition removable again.</p>
+    ${CONDITIONS.map(({name, stat}) => `<label class="spell-availability"><input type="checkbox" name="${name}" ${c.permanentConditions?.includes(name) ? 'checked' : ''}>${name} (${stat})</label>`).join('')}
+    <div class="modal-actions"><button class="btn" type="button" data-action="close-modal">Cancel</button><button class="btn primary">Save conditions</button></div></form>`);
+}
+
+function damageDiceControls(name, value = '', optional = false) {
+  const parsed = parseDamageFormula(value) || {count:1, sides:6, modifier:0};
+  return `<fieldset class="dice-builder" data-dice-builder data-name="${name}"><legend>${optional ? 'Spell damage (optional)' : 'Damage dice'}</legend>
+    ${optional ? `<label class="spell-availability"><input type="checkbox" data-damage-enabled ${value ? 'checked' : ''}>This spell deals damage</label>` : ''}
+    <div class="dice-controls"><label><span class="field-label">Number</span><input class="input" type="number" min="1" max="20" step="1" data-damage-count value="${parsed.count}"></label>
+    <label><span class="field-label">Die</span><select data-damage-sides>${[...new Set([4,6,8,10,12,20,100,parsed.sides])].sort((a,b)=>a-b).map(sides => `<option value="${sides}" ${sides === parsed.sides ? 'selected' : ''}>d${sides}</option>`).join('')}</select></label>
+    <label><span class="field-label">Bonus</span><input class="input" type="number" min="-99" max="99" step="1" data-damage-modifier value="${parsed.modifier}"></label></div>
+    <input type="hidden" name="${name}" value="${esc(value || (optional ? '' : '1d6'))}"><output class="small muted" data-damage-preview>${esc(value || (optional ? 'No damage selected' : '1d6'))}</output></fieldset>`;
+}
+
+function updateDamageDice(input) {
+  const builder = input.closest('[data-dice-builder]');
+  if (!builder) return;
+  const enabled = builder.querySelector('[data-damage-enabled]');
+  const count = Number(builder.querySelector('[data-damage-count]').value);
+  const sides = Number(builder.querySelector('[data-damage-sides]').value);
+  const modifier = Number(builder.querySelector('[data-damage-modifier]').value);
+  const formula = parseDamageFormula(`${count}d${sides}${modifier ? fmtSign(modifier) : ''}`);
+  if (!formula || !Number.isInteger(modifier)) return;
+  const value = !enabled || enabled.checked ? formula.formula : '';
+  builder.querySelector('input[type="hidden"]').value = value;
+  builder.querySelector('[data-damage-preview]').textContent = value || 'No damage selected';
+  if (input.form?.id === 'weapon-damage-form') weaponDamage = {formula:value, mode:input.form.elements.mode.value, result:null};
+  if (input.form?.id === 'play-spell-damage-form') playDamage = {formula:value, mode:input.form.elements.mode.value, result:null};
+  const output = document.getElementById(input.form?.id + '-result');
+  if (output) output.textContent = '';
+}
+
+function spellDamageFormula(spell) {
+  return parseDamageFormula(spell.damage)?.formula || parseDamageFormula((`${spell.effect || ''} ${spell.note || ''}`).match(/\b\d{1,2}d\d{1,3}(?:\s*[+-]\s*\d{1,2})?\b/i)?.[0])?.formula || '';
+}
+
+function playSpellDamage() {
+  const c = current();
+  const spells = c.spells.filter(spell => canCastSpell(c, spell) && (spellCategory(spell) === 'Attack' || spell.damage));
+  const selected = spells.find(spell => spell.id === playSpellId);
+  return infoCard('Spell damage', `<label><span class="field-label">Attack spell</span><select id="play-attack-spell"><option value="">Choose dice manually</option>${spells.map(spell => `<option value="${esc(spell.id)}" ${selected === spell ? 'selected' : ''}>${esc(spell.name)}${spellDamageFormula(spell) ? ' · ' + spellDamageFormula(spell) : ''}</option>`).join('')}</select></label>
+    <div style="margin-top:14px">${damageRoller('play-spell-damage-form', playDamage, selected?.id)}</div>`);
+}
+
+function renderRules() {
+  return pagehead('Rules & reference', 'Search core moves, all nine classes, Paths, magic, equipment, and GM procedures.') +
+    `<section class="card"><p class="small muted">Dungeon World 2 Beta v3 reference summaries adapted from <a href="https://charlesblanche.github.io/Nocturne-Beta/" target="_blank" rel="noopener">Nocturne Beta by Charles Blanche</a>. Some Path excerpts are abbreviated; consult the rulebook page shown for full wording.</p>
+    <div class="tabset">${['All','Core moves','Classes','Paths','Magic','Equipment','GM'].map(category => `<button class="tab ${rulesCategory === category ? 'active' : ''}" data-action="rules-category" data-category="${category}">${category}</button>`).join('')}</div>
+    <label class="rules-search"><span class="field-label">Search reference</span><input class="input" data-rules-search value="${esc(rulesSearch)}" placeholder="Move, class, school, item, or rule"></label><div id="rules-results">${rulesResults()}</div></section>`;
+}
+
+function rulesResults() {
+  const entries = [], add = (category, name, detail, extra = '', page) => entries.push({category,name,detail,extra,page});
+  for (const move of REFERENCE.CORE_MOVES || []) {
+    const extra = REFERENCE.NR_COREDATA?.[move.name] || {};
+    add('Core moves',move.name,extra.trigger || move.hint,[extra.hit,extra.mixed,extra.miss,extra.tip].filter(Boolean).join('\n'));
+  }
+  for (const rule of Object.values(CLASS_RULES)) {
+    add('Classes',rule.name,`Base HP: ${rule.hp}. Starting Move: ${rule.startingMove}.`,rule.startingDescription);
+    for (const path of rule.paths) {
+      add('Paths',`${rule.name} · ${path.name}`,path.starter.name,path.starter.hint,path.starter.reference_page);
+      for (const move of path.moves) add('Paths',move.name,`${rule.name} · ${path.name}${move.roll ? ' · Roll +' + move.roll : ''}`,move.hint,move.reference_page);
+    }
+  }
+  for (const school of SCHOOLS) add('Magic',school.id,`Substance: ${school.sub}`,`Verbs: ${school.verbs.join(', ')}`);
+  for (const [name, detail] of Object.entries(REFERENCE.NR_GM_GUIDE || {})) add(['MAG','Spells'].includes(name) ? 'Magic' : 'GM',name,detail);
+  for (const condition of CONDITIONS) add('Core moves',condition.name,condition.desc,'Marked Conditions can recover normally. Locked Conditions require special recovery. Permanent Conditions are a campaign house rule.');
+  for (const item of REFERENCE.NR_CATALOG || []) add('Equipment',item.name,item.description || '',[item.damage ? 'Damage: ' + item.damage : '',item.armor ? 'Armor: ' + item.armor : '',item.tags?.join(' '),item.uses ? item.uses + ' uses' : ''].filter(Boolean).join(' · '));
+  for (const name of REFERENCE.NR_GM_MOVES || []) add('GM',name,'A way for the GM to change or complicate the fiction when a GM Move is called for.');
+  const query = rulesSearch.toLowerCase().trim();
+  const matches = entries.filter(entry => (rulesCategory === 'All' || entry.category === rulesCategory) && Object.values(entry).join(' ').toLowerCase().includes(query));
+  return `<p class="small muted">${matches.length} matching entries</p><div class="reference-grid">${matches.map(entry => `<details class="reference-entry"><summary><strong>${esc(entry.name)}</strong><span class="small muted">${esc(entry.category)}${entry.page ? ' · Rulebook p. ' + entry.page : ''}</span></summary><p>${esc(entry.detail)}</p>${entry.extra ? `<p class="small muted record-details">${esc(entry.extra)}</p>` : ''}</details>`).join('') || '<div class="empty">No matching rules. Try another term.</div>'}</div>`;
+}
+
+function renderClassPaths() {
+  const c = current();
+  const ownClass = c.className || 'Wizard';
+  const paths = Object.values(CLASS_RULES).flatMap(rule => rule.paths.map(path => ({...path, className:rule.name, key:rule.name === 'Wizard' ? path.name : rule.name + '::' + path.id})));
+  return pagehead('Paths & growth','Choose your class Paths or a multiclass Path, then learn its moves separately.') +
+    infoCard('Advancement plan', `<p class="small muted">Level ${c.level} · ${esc(ownClass)}. Choose Paths through level-up advancements or GM approval.</p><label><span class="field-label">Advancement history / choices</span><textarea data-bind="advancementNotes">${esc(c.advancementNotes || '')}</textarea></label>`) +
+    `<div class="tabset path-filters">${['All', ...Object.keys(CLASS_RULES)].map(name => `<button class="tab ${pathClassFilter === name ? 'active' : ''}" data-action="path-class" data-class="${name}">${name}</button>`).join('')}</div><div class="reference-grid">${paths.filter(path => pathClassFilter === 'All' || path.className === pathClassFilter).map(path => {
+      const owned = c.paths.includes(path.key);
+      const wizard = path.className === 'Wizard' ? PATHS.find(entry => entry.id === path.name) : null;
+      return `<section class="card"><div class="flex-spread"><div><span class="small muted">${path.className === ownClass ? esc(path.className) : 'Multiclass · ' + esc(path.className)}</span><h2>${esc(path.name)}</h2></div><button class="btn ${owned ? 'primary' : ''}" data-action="class-path" data-path="${esc(path.key)}">${owned ? 'Acquired' : 'Acquire'}</button></div>
+        <p class="small muted"><strong>${esc(ownClass === 'Wizard' ? wizard?.starting || path.starter.name : path.starter.name)}</strong> · ${esc(ownClass === 'Wizard' ? wizard?.startingDesc || path.starter.hint : path.starter.hint)}</p>
+        ${path.moves.map(move => {
+          const id = wizard ? wizard.moves.find(entry => entry.id.replace(/[^a-z]/gi,'').toLowerCase() === move.name.replace(/[^a-z]/gi,'').toLowerCase())?.id || move.name : path.key + '::' + move.id;
+          const description = wizard?.moves.find(entry => entry.id === id)?.desc || move.hint;
+          return `<div class="path-move"><div class="flex-spread"><strong>${esc(move.name)}</strong><button class="btn tiny ${c.moves.includes(id) ? 'primary' : ''}" data-action="class-move" data-move="${esc(id)}" data-path="${esc(path.key)}" ${owned ? '' : 'disabled'}>${c.moves.includes(id) ? 'Learned' : 'Learn'}</button></div><p>${esc(description)}</p></div>`;
+        }).join('')}</section>`;
+    }).join('')}</div>`;
+}
+
+function classPathByKey(key) {
+  for (const rule of Object.values(CLASS_RULES)) {
+    const path = rule.paths.find(path => (rule.name === 'Wizard' ? path.name : rule.name + '::' + path.id) === key);
+    if (path) return {...path, className:rule.name, key};
+  }
+  return null;
+}
+
+function classPathToggle(key) {
+  const c = current(), path = classPathByKey(key);
+  if (!path) return;
+  if (c.paths.includes(key)) {
+    if (!confirm(`Remove ${path.name} and its learned moves?`)) return;
+    c.paths = c.paths.filter(id => id !== key);
+    const wizard = PATHS.find(entry => entry.id === key);
+    c.moves = c.moves.filter(id => !id.startsWith(key + '::') && !wizard?.moves.some(move => move.id === id));
+  } else {
+    c.paths.push(key);
+    const wizard = PATHS.find(entry => entry.id === key);
+    if (wizard) c.prepared = c.prepared.filter(school => school !== wizard.school);
+  }
+  save(); render();
+}
+
+function renderCharacterLibrary() {
+  return pagehead('Character library','Your saved characters and Alwyn’s three age sheets.',`<button class="btn primary" data-action="character-new">${ico('plus')} New character</button>`) +
+    `<div class="reference-grid">${db.characters.map(character => `<article class="card ${character.id === db.activeId ? 'current-character' : ''}"><h2>${esc(characterName(character))}</h2><p class="small muted">Level ${character.level} · ${esc(character.className || 'Wizard')}${character.alwyn ? ' · Three ages' : ''}</p><div class="pillbar">${character.paths.map(path => pill(classPathByKey(path)?.name || path)).join('')}</div><div class="flex-row" style="margin-top:18px"><button class="btn primary" data-action="character-switch" data-id="${esc(character.id)}">${character.id === db.activeId ? 'Open current' : 'Open character'}</button>${character.id === db.activeId ? '<button class="btn" data-action="character-duplicate">Duplicate</button><button class="btn danger" data-action="character-delete">Delete</button>' : ''}</div></article>`).join('')}</div>`;
+}
+
+function characterNewModal() {
+  modal('New character', `<form id="new-character-form" class="block-stack"><label><span class="field-label">Character name</span><input class="input" name="name" required maxlength="100" placeholder="Character name"></label>
+    <label><span class="field-label">Class</span><select name="className" id="new-character-class">${opts(Object.keys(CLASS_RULES), 'Wizard')}</select></label>
+    <div id="new-class-summary" class="small muted">${esc(CLASS_RULES.Wizard.startingDescription)}</div>
+    <details><summary>Multiclass (optional)</summary><p class="small muted">Select a starting Path from another class if your GM allows it. You can also acquire a multiclass Path later in Paths & growth.</p><label><span class="field-label">Additional Path</span><select name="multiclassPath"><option value="">None</option>${Object.values(CLASS_RULES).map(rule => `<optgroup label="${rule.name}">${rule.paths.map(path => `<option value="${esc(rule.name === 'Wizard' ? path.name : rule.name + '::' + path.id)}">${esc(rule.name + ' · ' + path.name)}</option>`).join('')}</optgroup>`).join('')}</select></label></details>
+    <div class="modal-actions"><button class="btn" type="button" data-action="close-modal">Cancel</button><button class="btn primary">Create character</button></div></form>`);
+}
+
+function createCharacter(data) {
+  const className = CLASS_RULES[data.get('className')] ? data.get('className') : 'Wizard';
+  const rule = CLASS_RULES[className], character = fresh(String(data.get('name') || 'New character').trim().slice(0,100));
+  character.className = className;
+  character.level = 1; character.paths = []; character.hp = rule.hp;
+  const path = classPathByKey(data.get('multiclassPath'));
+  if (path) character.paths.push(path.key);
+  const spread = rule.statsRule, stats = {...spread.locked}, primary = spread.choose[0];
+  stats[primary] = spread.chosen;
+  if (spread.other !== undefined) for (const stat of spread.choose) if (stat !== primary) stats[stat] = spread.other;
+  const remaining = [...spread.remaining];
+  for (const stat of ['STR','DEX','INT','WIS','CHA']) if (!(stat in stats)) stats[stat] = remaining.shift() ?? 0;
+  character.stats = stats;
+  character.prepared = className === 'Wizard' ? ['Abjuration','Evocation','Illusion'] : [];
+  character.focus = className === 'Wizard' ? 'skull' : '';
+  character.equipment = className === 'Wizard' ? ['gear','potion'] : [];
+  character.inventory = [];
+  if (className !== 'Wizard') character.spells = [];
+  return migrateCharacter(character);
+}
+
+function resetCharacterTools() {
+  diceLast = null; playSpellId = ''; playDamage = {}; weaponDamage = {};
+}
+
+function renderNotes(){const c=current();return pagehead('Campaign journal','Backstory, relationships, and campaign notes.')+`<div class="cols-2"><div class="block-stack">${backstoryCard(c)}
+${recordCard(c,'journalEntries')}
+${c.notes ? infoCard('Earlier notes for this age', '<textarea data-bind="notes">'+esc(c.notes)+'</textarea>') : ''}</div><div class="block-stack">
 ${infoCard('Relationships',`<p class="para small">Record PCs, relationship descriptions, and Depth (0–3).</p><div class="group-list">${c.relationships.length?c.relationships.map((rel,i)=>`<div class="group-item"><div style="flex:1"><strong>${esc(rel.name)}</strong><div class="micro muted">${esc(rel.description)}</div><div class="micro muted">Depth: ${clamp(rel.depth||0,0,3)}</div></div><button class="icon-btn" data-action="relationship-edit" data-index="${i}" aria-label="Edit relationship">${ico('edit')}</button></div>`).join(''):'<div class="empty">No relationships yet</div>'}</div><button class="btn" style="margin-top:13px" data-action="relationship-new">${ico('plus')} Add relationship</button>`)}
-</div><div class="block-stack">${infoCard('Your characters',`<div class="group-list">${db.characters.map(x=>`<div class="character-row ${x.id===c.id?'current':''}"><div class="flex-row" style="min-width:0"><div class="char-mini">✦</div><div><strong>${esc(characterName(x))}</strong><p>Level ${x.level} · ${x.alwyn ? 'Three ages' : esc(x.paths.join(' + ')||'Wizard')}</p></div></div>${x.id===c.id?pill('Current','accent'):`<button class="btn tiny" data-action="character-switch" data-id="${x.id}">Open</button>`}</div>`).join('')}</div><div class="flex-row" style="margin-top:14px"><button class="btn" data-action="character-new">${ico('plus')} New</button><button class="btn" data-action="character-duplicate">${ico('copy')} Duplicate</button></div><div class="separator"></div><button class="btn danger" data-action="character-delete">${ico('delete')} Delete current character</button>${!c.alwyn && /\balwyn\b/i.test(c.name) ? `<div class="separator"></div><button class="btn primary" data-action="alwyn-edit">Set up Alwyn’s three ages</button>` : ''}`)}
-${driveSync?.configured ? infoCard('Google Drive', `<div class="group-list"><p class="para small">Sync your characters in the Drive folder you choose. <a href="./privacy.html" target="_blank" rel="noopener">Privacy</a></p><p id="drive-status" class="para small" role="status">${esc(driveSync.status())}</p><button id="drive-button" class="btn btn-wide" data-action="drive-sync" ${driveSync.disabled()?'disabled':''}>${esc(driveSync.button())}</button><div id="drive-disconnect-row" ${db.drive?'':'hidden'}><button id="drive-disconnect" class="btn btn-wide" data-action="drive-disconnect" ${driveSync.disabled()?'disabled':''}>Disconnect this device</button></div></div>`) : ''}
-${infoCard('Export & restore',`<div class="alert info" style="margin-bottom:17px">Your edits are saved automatically <strong>in this browser</strong>. Export a backup to keep a separate copy or move your characters to another device.</div><div class="group-list"><button class="btn btn-wide primary" data-action="export">${ico('download')} Export ALL characters · JSON</button><button class="btn btn-wide" data-action="import">${ico('upload')} Import a JSON backup</button><button class="btn btn-wide" data-action="export-character">${ico('download')} Export current character only</button><button class="btn btn-wide" data-action="print">${ico('printer')} Print character sheet</button></div><p class="footnote" style="margin-top:14px">Import adds characters from a saved backup without overwriting existing ones. Backups include stats, notes, spells, and portrait data. Keep a copy somewhere you control (e.g., Files, Google Drive, or another cloud folder).</p>`)}
-${infoCard('App information',`<div class="group-list"><div class="group-item"><span>Theme</span><button class="btn tiny" data-action="theme">${db.theme==='dark'?'Dark':'Light'} · change</button></div><div class="group-item"><span>Rule source</span>${pill('Dungeon World 2 Beta v3')}</div><div class="group-item"><span>Storage</span>${pill(volatile?'Needs backup':'Local browser','accent')}</div></div><p class="footnote" style="margin-top:13px">Built from your DW2 Beta v3 Character Keeper export. This is an unofficial character tool. Spell examples are proposals requiring GM approval. For offline phone installation, use the hosted PWA version over HTTPS; a downloaded local HTML file may have different browser storage behavior.</p>`)}
 </div></div>`;}
+function renderEquipment(){const c=current();return pagehead('Equipment & inventory',c.alwyn?'Shared equipment and inventory for all three ages.':'Manage your focus, supplies, wealth, and carried items.')+`<div class="cols-2"><div class="block-stack">${infoCard('Equipment & focus',`<div class="field-grid">${select('Arcane focus','focus',c.focus,FOCI)}<div><span class="field-label">Focus benefit</span><div class="alert info">${esc(FOCI.find(f=>f.id===c.focus)?.desc||'')}</div></div><div class="full"><span class="field-label">Equipment (choose two at character creation)</span><div class="group-list">${EQUIPMENT.map(e=>`<div class="group-item"><label style="display:flex;gap:10px;align-items:center;flex:1;cursor:pointer"><input type="checkbox" data-equipment="${e.id}" ${c.equipment.includes(e.id)?'checked':''}/><span><strong>${esc(e.name)}</strong><span class="micro muted" style="display:block">${esc(e.desc)}</span></span></label>${e.max&&c.equipment.includes(e.id)?`<div class="flex-row"><button class="btn tiny" data-action="use" data-item="${e.id}" data-delta="1">Use</button><span class="micro muted">${clamp(c.used[e.id]||0,0,e.max)}/${e.max}</span><button class="btn tiny" data-action="use" data-item="${e.id}" data-delta="-1">↺</button></div>`:''}</div>`).join('')}</div></div></div>`)}
+</div><div class="block-stack">${recordCard(c,'inventory')}
+${classEquipmentCard(c)}</div></div>`;}
+function renderSaves(){const c=current();return pagehead('App & saves','Drive sync, backups, and appearance.')+`<div class="cols-2"><div class="block-stack">${driveSync?.configured ? infoCard('Google Drive', `<div class="group-list"><p class="para small">Sync your characters in the Drive folder you choose. <a href="./privacy.html" target="_blank" rel="noopener">Privacy</a></p><p id="drive-status" class="para small" role="status">${esc(driveSync.status())}</p><button id="drive-button" class="btn btn-wide" data-action="drive-sync" ${driveSync.disabled()?'disabled':''}>${esc(driveSync.button())}</button><div id="drive-disconnect-row" ${db.drive?'':'hidden'}><button id="drive-disconnect" class="btn btn-wide" data-action="drive-disconnect" ${driveSync.disabled()?'disabled':''}>Disconnect this device</button></div></div>`) : ''}
+${infoCard('Export & restore',`<div class="alert info" style="margin-bottom:17px">Your edits are saved automatically <strong>in this browser</strong>. Export a backup to keep a separate copy or move your characters to another device.</div><div class="group-list"><button class="btn btn-wide primary" data-action="export">${ico('download')} Export ALL characters · JSON</button><button class="btn btn-wide" data-action="import">${ico('upload')} Import a JSON backup</button><button class="btn btn-wide" data-action="export-character">${ico('download')} Export current character only</button><button class="btn btn-wide" data-action="print">${ico('printer')} Print character sheet</button></div><p class="footnote" style="margin-top:14px">Import adds characters from a saved backup without overwriting existing ones. Backups include stats, notes, spells, and portrait data. Keep a copy somewhere you control (e.g., Files, Google Drive, or another cloud folder).</p>`)}
+</div><div class="block-stack">${infoCard('App information',`<div class="group-list"><div class="group-item"><span>Theme</span><button class="btn tiny" data-action="theme">${db.theme==='dark'?'Dark':'Light'} · change</button></div><div class="group-item"><span>Rule source</span>${pill('Dungeon World 2 Beta v3')}</div><div class="group-item"><span>Storage</span>${pill(volatile?'Needs backup':'Local browser','accent')}</div></div><p class="footnote" style="margin-top:13px">Built from your DW2 Beta v3 Character Keeper export. This is an unofficial character tool. Spell examples are proposals requiring GM approval. For offline phone installation, use the hosted PWA version over HTTPS; a downloaded local HTML file may have different browser storage behavior.</p>`)}
+</div></div>`;}
+function classEquipmentCard(c){const rule=CLASS_RULES[c.className || 'Wizard'];return !rule?.equipment ? '' : infoCard('Starting equipment reference',`<p class="small muted">${esc(rule.name)} starting options. Record selected items in your carried inventory.</p><div class="group-list">${[...(rule.equipment.weapons || []).map(([name,desc])=>name+' · '+desc),...(rule.equipment.items || [])].map(name=>`<div class="group-item">${esc(name)}</div>`).join('')}</div>`);}
+
 function modal(title, content, view = '') {
   const dialog = document.getElementById('modal');
   dialog.dataset.view = view;
@@ -635,15 +861,12 @@ function renderDamageResult(result) {
     ${dropped ? ` · Dropped ${dropped.total} (${detail(dropped)})` : ''}</span>`;
 }
 
-function damageRoller(id, {formula = '', mode = 'normal', result = null} = {}) {
-  return `<form id="${id}" class="damage-roller" data-damage-form>
-    <label><span class="field-label">Damage dice</span><input class="input" name="formula" value="${esc(formula)}"
-      required placeholder="e.g. 1d6+2" maxlength="24" autocomplete="off"></label>
-    <label><span class="field-label">Damage roll</span><select name="mode">${damageModes.map(([value, label]) =>
-      `<option value="${value}" ${mode === value ? 'selected' : ''}>${label}</option>`).join('')}</select></label>
+function damageRoller(id, {formula = '', mode = 'normal', result = null} = {}, spellId = '') {
+  return `<form id="${id}" class="damage-roller" data-damage-form data-spell-id="${esc(spellId || '')}">
+    ${damageDiceControls('formula', formula)}
+    <label><span class="field-label">Damage roll</span><select name="mode">${damageModes.map(([value,label])=>`<option value="${value}" ${mode === value ? 'selected' : ''}>${label}</option>`).join('')}</select></label>
     <button class="btn primary" type="submit">${ico('dice')} Roll damage</button>
-    <div id="${id}-result" class="quick-dice-result damage-result" role="status">${renderDamageResult(result)}</div>
-  </form>`;
+    <div id="${id}-result" class="quick-dice-result damage-result" role="status">${renderDamageResult(result)}</div></form>`;
 }
 
 function rollDamage(form) {
@@ -657,6 +880,9 @@ function rollDamage(form) {
   }
   const result = damageRoll(formula, mode);
   if (form.id === 'weapon-damage-form') weaponDamage = {formula: formula.formula, mode, result};
+  if (form.id === 'play-spell-damage-form') playDamage = {formula:formula.formula, mode, result};
+  const spell = current().spells.find(spell => spell.id === form.dataset?.spellId);
+  if (spell && spell.damage !== formula.formula) { spell.damage = formula.formula; save(); }
   output.innerHTML = renderDamageResult(result);
 }
 
@@ -737,7 +963,7 @@ function castSpellModal(id, trigger) {
     <div id="cast-result" class="dice-area cast-result" role="status" hidden></div>
     <div class="modal-actions"><button type="button" class="btn" data-action="close-modal">Close</button>
       <button type="submit" class="btn primary" id="cast-roll" ${check.problem ? 'disabled' : ''}>${ico('dice')} Roll cast</button></div>
-  </form>${canRollDamage ? infoCard('Spell damage', damageRoller('spell-damage-form', {formula: spell.damage || ''})) : ''}</div>`);
+  </form>${canRollDamage ? infoCard('Spell damage', damageRoller('spell-damage-form', {formula: spellDamageFormula(spell)}, spell.id)) : ''}</div>`);
   document.getElementById(check.problem ? 'cast-magnitude' : 'cast-roll')?.focus?.();
 }
 
@@ -782,18 +1008,18 @@ function rollQuickDice(form) {
   quickDice = {count, sides, modifier, dice, total};
   document.getElementById('quick-dice-result').innerHTML = quickDiceResult(quickDice);
 }
-function spellModal(id){const c=current(),sp=c.spells.find(x=>x.id===id)||{id:'',name:'',verb:availableVerbs(c)[0]||'Cloak',sub:availableSubs(c)[0]||'Sights and/or sounds',category:'Utility',mag:'?',effect:'',note:''};const verbs=[...new Set([...SCHOOLS.flatMap(s=>s.verbs),...PATHS.flatMap(p=>p.extra)])];const subs=SCHOOLS.map(s=>s.sub);modal(id?'Edit spell':'Create a spell',`<form id="spell-form" data-id="${esc(sp.id)}"><div class="field-grid"><label class="full"><span class="field-label">Spell name</span><input name="name" class="input" required maxlength="100" value="${esc(sp.name)}" placeholder="e.g. Windstep"/></label><label><span class="field-label">Verb</span><select name="verb">${opts(verbs,sp.verb)}</select></label><label><span class="field-label">Substance</span><select name="sub">${opts(subs,sp.sub)}</select></label><label><span class="field-label">Category</span><select name="category">${opts(spellCategories,spellCategory(sp))}</select></label><label><span class="field-label">Magnitude (GM-approved)</span><select name="mag">${opts(['?','0','1','2','3','4','5+'],sp.mag)}</select></label><label class="full"><span class="field-label">Damage dice (optional)</span><input class="input" name="damage" value="${esc(sp.damage || '')}" placeholder="e.g. 1d6+2" maxlength="24"></label><label class="full"><span class="field-label">Desired effect</span><textarea name="effect" required placeholder="Describe what you want this spell to do...">${esc(sp.effect)}</textarea></label><label class="full"><span class="field-label">GM ruling / limits</span><textarea name="note" placeholder="Range, duration, narrative limits, approvals...">${esc(sp.note)}</textarea></label></div><div class="modal-actions">${id?`<button type="button" class="btn danger" data-action="spell-delete" data-id="${esc(id)}">${ico('delete')} Delete</button>`:''}<button type="button" class="btn" data-action="close-modal">Cancel</button><button type="submit" class="btn primary">${ico('save')} Save spell</button></div></form><p class="footnote">You can draft a future spell even if its school is not currently prepared. Unavailable spells are labeled in the spellbook.</p>`);}
+function spellModal(id){const c=current(),sp=c.spells.find(x=>x.id===id)||{id:'',name:'',verb:availableVerbs(c)[0]||'Cloak',sub:availableSubs(c)[0]||'Sights and/or sounds',category:'Utility',mag:'?',effect:'',note:''};const verbs=[...new Set([...SCHOOLS.flatMap(s=>s.verbs),...PATHS.flatMap(p=>p.extra)])];const subs=SCHOOLS.map(s=>s.sub);modal(id?'Edit spell':'Create a spell',`<form id="spell-form" data-id="${esc(sp.id)}"><div class="field-grid"><label class="full"><span class="field-label">Spell name</span><input name="name" class="input" required maxlength="100" value="${esc(sp.name)}" placeholder="e.g. Windstep"/></label><label><span class="field-label">Verb</span><select name="verb">${opts(verbs,sp.verb)}</select></label><label><span class="field-label">Substance</span><select name="sub">${opts(subs,sp.sub)}</select></label><label><span class="field-label">Category</span><select name="category">${opts(spellCategories,spellCategory(sp))}</select></label><label><span class="field-label">Magnitude (GM-approved)</span><select name="mag">${opts(['?','0','1','2','3','4','5+'],sp.mag)}</select></label><div class="full">${damageDiceControls('damage', spellDamageFormula(sp), true)}</div><label class="full"><span class="field-label">Desired effect</span><textarea name="effect" required placeholder="Describe what you want this spell to do...">${esc(sp.effect)}</textarea></label><label class="full"><span class="field-label">GM ruling / limits</span><textarea name="note" placeholder="Range, duration, narrative limits, approvals...">${esc(sp.note)}</textarea></label></div><div class="modal-actions">${id?`<button type="button" class="btn danger" data-action="spell-delete" data-id="${esc(id)}">${ico('delete')} Delete</button>`:''}<button type="button" class="btn" data-action="close-modal">Cancel</button><button type="submit" class="btn primary">${ico('save')} Save spell</button></div></form><p class="footnote">You can draft a future spell even if its school is not currently prepared. Unavailable spells are labeled in the spellbook.</p>`);}
 function relationshipModal(index){const r=index===null?{name:'',description:'',depth:0}:current().relationships[index];modal(index===null?'Add relationship':'Edit relationship',`<form id="relationship-form" data-index="${index===null?'':index}"><div class="field-grid"><label class="full"><span class="field-label">Character name</span><input class="input" name="name" required value="${esc(r.name)}"/></label><label class="full"><span class="field-label">Relationship</span><textarea name="description">${esc(r.description)}</textarea></label><label><span class="field-label">Depth</span><select name="depth">${opts(['0','1','2','3'],String(r.depth))}</select></label></div><div class="modal-actions">${index!==null?`<button type="button" class="btn danger" data-action="relationship-delete" data-index="${index}">Delete</button>`:''}<button type="button" class="btn" data-action="close-modal">Cancel</button><button type="submit" class="btn primary">Save relationship</button></div></form>`);}
 function campModal(){const c=current(),marked=CONDITIONS.filter(x=>c.conditions[x.name]==='marked');modal('Make Camp',`<p class="para">Once per session, recover all HP and clear <strong>one marked Condition</strong>. Forgotten prepared schools are restored. Your normal three prepared schools can be changed on the Magic page.</p><label><span class="field-label">Condition to clear</span><select id="camp-condition">${opts(['None',...marked.map(x=>x.name)],marked.length?marked[0].name:'None')}</select></label><div class="alert info" style="margin-top:14px">The world advances while you rest. Your GM may make threats progress.</div><div class="modal-actions"><button class="btn" data-action="close-modal">Cancel</button><button class="btn primary" data-action="camp-confirm">Finish Make Camp</button></div>`);}
 function limitModal(){const c=current();modal('Reach Your Limit',`<p class="para">When all five Conditions are marked or locked, clear marked Conditions, then choose and roleplay an outburst. Lock the associated Condition.</p><label><span class="field-label">Condition to lock after the outburst</span><select id="limit-condition">${opts(CONDITIONS.map(x=>x.name),'Angry')}</select></label><div class="modal-actions"><button class="btn" data-action="close-modal">Cancel</button><button class="btn primary" data-action="limit-confirm">Resolve limit</button></div>`);}
 function portraitModal(){modal('Character portrait',`<p class="para">Add a personal portrait. It will be stored in your character backup and resized for mobile use.</p><input id="portrait-input" type="file" accept="image/png,image/jpeg,image/webp" class="input"/><div class="modal-actions"><button class="btn danger" data-action="portrait-remove">Remove portrait</button><button class="btn" data-action="close-modal">Cancel</button><button class="btn primary" data-action="portrait-save">Save portrait</button></div>`);}
-function characterNewModal(){modal('New Wizard',`<form id="new-character-form"><label><span class="field-label">Character name</span><input class="input" name="name" autofocus required placeholder="Your wizard's name" maxlength="100"/></label><label style="display:block;margin-top:13px"><span class="field-label">Starting preset</span><select name="preset"><option value="level1">Level 1 · starting Wizard (3 schools, no Path)</option><option value="illusionist">Level 2 · Illusionist build (4 schools)</option></select></label><div class="modal-actions"><button class="btn" type="button" data-action="close-modal">Cancel</button><button class="btn primary" type="submit">Create Wizard</button></div></form>`);}
+
 function pathToggle(id){const c=current(),p=PATHS.find(x=>x.id===id);if(!p)return;if(hasPath(c,id)){if(!confirm(`Remove ${id} Path? Its unlocked moves will also be removed.`))return;c.paths=c.paths.filter(v=>v!==id);c.moves=c.moves.filter(m=>!p.moves.some(x=>x.id===m));c.prepared=[...new Set(c.prepared)].slice(0,3);}else{if(c.paths.length>=2){toast('This Wizard sheet tracks up to two Wizard Paths.');return}c.paths.push(id);if(c.prepared.includes(p.school))c.prepared=c.prepared.filter(x=>x!==p.school);if(c.level===1)toast('Rules note: Paths normally require a level-up advancement.');}save();render();}
 function exportJSON(data,filename){const blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json'});const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download=filename;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),1500);toast('JSON backup created. Keep a copy outside this browser.');}
 function exportAll(){save();exportJSON({format:'Arcanum DW2 Wizard Keeper',version:1,exportedAt:new Date().toISOString(),characters:db.characters},'Arcanum-DW2-all-characters.json')}
 function exportChar(){save();exportJSON({format:'Arcanum DW2 Wizard Keeper',version:1,exportedAt:new Date().toISOString(),characters:[currentCharacter()]},`Arcanum-${characterName(currentCharacter()).replace(/[^a-z0-9-]+/gi,'-')}.json`)}
-function normalizeImported(x, includeAlwyn = true){if(!x||typeof x!=='object'||Array.isArray(x))return null;const d=fresh(String(x.name||'Imported wizard').slice(0,120));const safe=(key,defaultVal)=>Array.isArray(x[key])?x[key]:defaultVal;
-Object.assign(d,{...x,id:uid(),name:String(x.name||'Imported wizard').slice(0,120),level:clamp(Number(x.level)||1,1,99),stats:{...d.stats,...(x.stats||{})},origins:{...d.origins,...(x.origins||{})},conditions:{...d.conditions,...(x.conditions||{})},hp:Math.max(0,Number(x.hp)||0),paths:safe('paths',[]).filter(p=>PATHS.some(q=>q.id===p)),moves:safe('moves',[]).filter(m=>PATHS.some(q=>q.moves.some(v=>v.id===m))),prepared:safe('prepared',[]).filter(p=>SCHOOLS.some(q=>q.id===p)).slice(0,3),forgotten:safe('forgotten',[]),equipment:safe('equipment',[]).filter(e=>EQUIPMENT.some(q=>q.id===e)),used:{...d.used,...(x.used||{})},spells:safe('spells',[]).slice(0,300).filter(sp=>sp&&typeof sp==='object').map(sp=>({...sp,id:uid()})),relationships:safe('relationships',[]).slice(0,40).filter(r=>r&&typeof r==='object'),createdAt:Date.now(),updatedAt:Date.now()});
+function normalizeImported(x, includeAlwyn = true){if(!x||typeof x!=='object'||Array.isArray(x))return null;x=migrateCharacter(structuredClone(x));const d=fresh(String(x.name||'Imported wizard').slice(0,120));const safe=(key,defaultVal)=>Array.isArray(x[key])?x[key]:defaultVal;
+Object.assign(d,{...x,id:uid(),name:String(x.name||'Imported wizard').slice(0,120),level:clamp(Number(x.level)||1,1,99),stats:{...d.stats,...(x.stats||{})},origins:{...d.origins,...(x.origins||{})},conditions:{...d.conditions,...(x.conditions||{})},hp:Math.max(0,Number(x.hp)||0),paths:safe('paths',[]).filter(p=>PATHS.some(q=>q.id===p)||classPathByKey(p)),moves:safe('moves',[]).filter(m=>PATHS.some(q=>q.moves.some(v=>v.id===m))||Object.values(CLASS_RULES).some(rule=>rule.paths.some(path=>path.moves.some(move=>m===rule.name+'::'+path.id+'::'+move.id)))),prepared:safe('prepared',[]).filter(p=>SCHOOLS.some(q=>q.id===p)).slice(0,3),forgotten:safe('forgotten',[]),equipment:safe('equipment',[]).filter(e=>EQUIPMENT.some(q=>q.id===e)),used:{...d.used,...(x.used||{})},spells:safe('spells',[]).slice(0,300).filter(sp=>sp&&typeof sp==='object').map(sp=>({...sp,id:uid()})),relationships:safe('relationships',[]).slice(0,40).filter(r=>r&&typeof r==='object'),createdAt:Date.now(),updatedAt:Date.now()});
   d.backstory = Object.fromEntries(storyFields.map(([key]) => [key, typeof x.backstory?.[key] === "string" ? x.backstory[key] : ""]));
   for (const key of ["inventory", "journalEntries"]) {
     d[key] = safe(key, []).map(record => cleanRecord(key, record, uid())).filter(Boolean);
@@ -804,6 +1030,7 @@ Object.assign(d,{...x,id:uid(),name:String(x.name||'Imported wizard').slice(0,12
     if (!forms?.noble || !forms?.sage) throw new Error('Alwyn backup is missing an age sheet.');
     const text = (value, limit = 3500) => typeof value === 'string' ? value.slice(0, limit) : '';
     d.alwyn = {
+      schemaVersion: 2,
       name: text(name, 120) || 'Alwyn',
       overview: text(overview),
       ...(Number.isInteger(x.alwyn.morningRoll) && ages[x.alwyn.morningRoll - 1] ? {morningRoll: x.alwyn.morningRoll} : {}),
@@ -844,7 +1071,14 @@ case 'record-delete': {
   render();
   break;
 }
-case 'nav':screen=a.dataset.screen;searchTerm='';render();window.scrollTo({top:0,behavior:'smooth'});break;
+case 'nav':if(!NAV.some(entry=>entry.id===a.dataset.screen))break;closeModal();screen=a.dataset.screen;searchTerm='';render();window.scrollTo({top:0,behavior:'smooth'});break;
+case 'quick-roll': libraryReturn=undefined; libraryTrigger=undefined; castTrigger=a; modal('Roll dice',quickDiceCard()); break;
+case 'more-nav': modal('Navigate', '<div class="group-list">'+NAV.map(entry=>`<button class="btn" data-action="nav" data-screen="${entry.id}">${ico(entry.icon)} ${entry.label}</button>`).join('')+'</div>'); break;
+case 'rules-category': rulesCategory=a.dataset.category; render(); break;
+case 'path-class': pathClassFilter=a.dataset.class; render(); break;
+case 'class-path': classPathToggle(a.dataset.path); break;
+case 'class-move': { if(!c.paths.includes(a.dataset.path))break; const id=a.dataset.move; c.moves=c.moves.includes(id)?c.moves.filter(move=>move!==id):[...c.moves,id];save();render();break; }
+case 'permanent-conditions':permanentConditionsModal();break;
 case 'alwyn-edit':alwynModal();break;
 case 'morning-roll': {
   if (!c.alwyn) break;
@@ -862,7 +1096,7 @@ case 'alwyn-age': {
   if (screen === 'alwyn') screen = 'sheet';
   searchTerm = '';
   magicFilter = 'All';
-  diceLast = null;
+  resetCharacterTools();
   persist();
   render();
   document.querySelector(`.age-tab[data-age="${age.id}"]`)?.focus();
@@ -888,12 +1122,12 @@ case 'xp-minus':c.xp=clamp(c.xp-1,0,5);save();render();break;
 case 'xp-plus':c.xp=clamp(c.xp+1,0,5);save();render();break;
 case 'level':{const old=maxHp(c);c.level=clamp(c.level+Number(a.dataset.delta),1,99);c.hp=clamp(c.hp+(maxHp(c)-old),0,maxHp(c));save();render();break}
 case 'level-up':if(c.xp<5)return;{const old=maxHp(c);c.level++;c.xp=0;c.hp=clamp(c.hp+(maxHp(c)-old),0,maxHp(c));screen='paths';save();render();toast('Level gained. Record your advancement on the Paths page.');break}
-case 'condition':c.conditions[a.dataset.condition]=a.dataset.state;save();render();break;
-case 'cycle-condition':{let prev=c.conditions[a.dataset.condition];c.conditions[a.dataset.condition]=prev==='clear'?'marked':prev==='marked'?'locked':'clear';save();render();break}
+case 'condition':if(!CONDITIONS.some(entry=>entry.name===a.dataset.condition)||!['clear','marked','locked'].includes(a.dataset.state)||c.permanentConditions?.includes(a.dataset.condition))break;c.conditions[a.dataset.condition]=a.dataset.state;save();render();break;
+case 'cycle-condition':{if(c.permanentConditions?.includes(a.dataset.condition))break;let prev=c.conditions[a.dataset.condition];c.conditions[a.dataset.condition]=prev==='clear'?'marked':prev==='marked'?'locked':'clear';save();render();break}
 case 'reach-limit':limitModal();break;
-case 'limit-confirm':{const locked=document.getElementById('limit-condition').value;for(const key of Object.keys(c.conditions)){if(c.conditions[key]==='marked')c.conditions[key]='clear';}c.conditions[locked]='locked';save();closeModal();render();toast('Reach Your Limit resolved. Roleplay the outburst.');break}
+case 'limit-confirm':{const locked=document.getElementById('limit-condition').value;for(const key of Object.keys(c.conditions)){if(c.conditions[key]==='marked'&&!c.permanentConditions?.includes(key))c.conditions[key]='clear';}c.conditions[locked]='locked';save();closeModal();render();toast('Reach Your Limit resolved. Roleplay the outburst.');break}
 case 'make-camp':campModal();break;
-case 'camp-confirm':{const k=document.getElementById('camp-condition').value;c.hp=maxHp(c);if(k!=='None'&&c.conditions[k]==='marked')c.conditions[k]='clear';c.forgotten=[];save();closeModal();render();toast('Made Camp: HP recovered and one marked Condition cleared.');break}
+case 'camp-confirm':{const k=document.getElementById('camp-condition').value;c.hp=maxHp(c);if(k!=='None'&&c.conditions[k]==='marked'&&!c.permanentConditions?.includes(k))c.conditions[k]='clear';c.forgotten=[];save();closeModal();render();toast('Made Camp: HP recovered and one marked Condition cleared.');break}
 case 'use':{const e=EQUIPMENT.find(e=>e.id===a.dataset.item);c.used[e.id]=clamp((c.used[e.id]||0)+Number(a.dataset.delta),0,e.max);save();render();break}
 case 'remember':c.forgotten=c.forgotten.filter(x=>x!==a.dataset.school);save();render();break;
 case 'forget':if(!c.forgotten.includes(a.dataset.school))c.forgotten.push(a.dataset.school);save();render();break;
@@ -910,15 +1144,21 @@ case 'relationship-new':relationshipModal(null);break;
 case 'relationship-edit':relationshipModal(Number(a.dataset.index));break;
 case 'relationship-delete':if(confirm('Delete this relationship?')){c.relationships.splice(Number(a.dataset.index),1);save();closeModal();render();}break;
 case 'character-new':characterNewModal();break;
-case 'character-duplicate':{const x=normalizeImported(currentCharacter());x.name+=' (copy)';if(x.alwyn)x.alwyn.name+=' (copy)';db.characters.push(x);db.activeId=x.id;save();render();toast('Duplicate character created.');break;}
-case 'character-switch':db.activeId=a.dataset.id;if(currentCharacter().alwyn)screen='alwyn';save();render();toast('Character opened.');break;
+case 'character-duplicate':{const x=normalizeImported(currentCharacter());x.name+=' (copy)';if(x.alwyn)x.alwyn.name+=' (copy)';db.characters.push(x);db.activeId=x.id;resetCharacterTools();save();render();toast('Duplicate character created.');break;}
+case 'character-switch':if(!db.characters.some(character=>character.id===a.dataset.id))break;save();db.activeId=a.dataset.id;resetCharacterTools();screen=currentCharacter().alwyn?'alwyn':'sheet';save();render();toast('Character opened.');break;
 case 'character-delete':if(db.characters.length<=1){toast('Create another character before deleting the last one.');break;}if(confirm(`Delete ${characterName(currentCharacter())}${c.alwyn?' and all three age sheets':''} ${db.drive?'from this device and your next Drive sync':'from this browser'}? Export a backup first if you want to keep a copy.`)){db.characters=db.characters.filter(x=>x.id!==c.id);db.activeId=db.characters[0].id;save();render();}break;
 default:break;
 }}
 document.addEventListener('click',e=>{const a=e.target.closest('[data-action]');if(a){e.preventDefault();handleAction(a)}});
-document.addEventListener('change',e=>{const a=e.target;if(a.matches('[data-hide-unavailable]')){hideUnavailable=a.checked;refreshSpellLists();}if(a.form?.id==='weapon-damage-form'&&a.name==='mode')rememberWeaponDamage(a);if(a.form?.id==='spell-cast-form')updateSpellCast(a.form);if(a.matches('[data-bind]')){changeBind(a.dataset.bind,a.value);refreshAfterChange(a.dataset.bind)}if(a.matches('[data-school]')){const c=current(),s=a.dataset.school;if(a.checked){if(c.prepared.length>=3){toast('Maximum three normal Prepared Schools. Owned Paths grant their schools separately.');render();return}c.prepared.push(s);}else c.prepared=c.prepared.filter(x=>x!==s);save();render();}if(a.matches('[data-equipment]')){const c=current(),id=a.dataset.equipment;if(a.checked){if(c.equipment.length>=2){toast('At character creation, choose two extra equipment items.');render();return}c.equipment.push(id);}else{c.equipment=c.equipment.filter(x=>x!==id);}save();render();}if(a.id==='dice-mag'){diceMag=a.value;diceLast=null;render();}if(a.id==='dice-extra'){diceExtra=a.value;diceLast=null;render();}});
+document.addEventListener('change',e=>{const a=e.target;
+if(a.closest?.('[data-dice-builder]'))updateDamageDice(a);
+if(a.id==='new-character-class')document.getElementById('new-class-summary').textContent=CLASS_RULES[a.value]?.startingDescription||'';
+if(a.id==='play-attack-spell'){playSpellId=a.value;const spell=current().spells.find(spell=>spell.id===playSpellId);playDamage={formula:spell?spellDamageFormula(spell):''};render();}
+if(a.matches('[data-hide-unavailable]')){hideUnavailable=a.checked;refreshSpellLists();}if(a.form?.id==='weapon-damage-form'&&a.name==='mode')rememberWeaponDamage(a);if(a.form?.id==='spell-cast-form')updateSpellCast(a.form);if(a.matches('[data-bind]')){changeBind(a.dataset.bind,a.value);refreshAfterChange(a.dataset.bind)}if(a.matches('[data-school]')){const c=current(),s=a.dataset.school;if(a.checked){if(c.prepared.length>=3){toast('Maximum three normal Prepared Schools. Owned Paths grant their schools separately.');render();return}c.prepared.push(s);}else c.prepared=c.prepared.filter(x=>x!==s);save();render();}if(a.matches('[data-equipment]')){const c=current(),id=a.dataset.equipment;if(a.checked){if(c.equipment.length>=2){toast('At character creation, choose two extra equipment items.');render();return}c.equipment.push(id);}else{c.equipment=c.equipment.filter(x=>x!==id);}save();render();}if(a.id==='dice-mag'){diceMag=a.value;diceLast=null;render();}if(a.id==='dice-extra'){diceExtra=a.value;diceLast=null;render();}});
 document.addEventListener('input', e => {
   const input = e.target;
+  if(input.matches('[data-rules-search]')){rulesSearch=input.value;document.getElementById('rules-results').innerHTML=rulesResults();}
+  if(input.closest?.('[data-dice-builder]'))updateDamageDice(input);
   if (input.name === 'mag' && input.form?.id === 'spell-cast-form') updateSpellCast(input.form);
   if (input.name === 'formula' && input.form?.id === 'weapon-damage-form') rememberWeaponDamage(input);
   if (input.matches('[data-bind]') && !input.matches('select')) changeBind(input.dataset.bind, input.value);
@@ -928,7 +1168,7 @@ document.addEventListener('input', e => {
   }
 });
 document.addEventListener('submit',e=>{
-if (e.target.id === 'spell-damage-form' || e.target.id === 'weapon-damage-form') {
+if (['spell-damage-form','weapon-damage-form','play-spell-damage-form'].includes(e.target.id)) {
   e.preventDefault();
   rollDamage(e.target);
   return;
@@ -938,6 +1178,11 @@ if (e.target.id === 'spell-cast-form' || e.target.id === 'quick-dice-form') {
   if (e.target.id === 'spell-cast-form') updateSpellCast(e.target, true);
   else rollQuickDice(e.target);
   return;
+}
+if(e.target.id==='permanent-conditions-form'){
+  e.preventDefault();const c=current(),data=new FormData(e.target);
+  c.permanentConditions=CONDITIONS.filter(({name})=>data.has(name)).map(({name})=>name);
+  for(const name of c.permanentConditions)c.conditions[name]='locked';save();closeModal();render();return;
 }
 if (e.target.id === 'alwyn-form') {
   e.preventDefault();
@@ -958,12 +1203,14 @@ if(e.target.id === 'character-record-form') {
   render();
   return;
 }
-if(e.target.id==='spell-form'){e.preventDefault();const f=e.target,form=new FormData(f),c=current(),id=f.dataset.id;const damageRaw=String(form.get('damage') ?? '').trim();const damage=parseDamageFormula(damageRaw);if(damageRaw&&!damage){toast('Enter damage dice like 1d6 or 2d8+1.');return;}const sp={id:id||uid(),...(damage?{damage:damage.formula}:{}),name:String(form.get('name')).trim().slice(0,110),verb:String(form.get('verb')),sub:String(form.get('sub')),category:spellCategory({category:form.get('category')}),mag:String(form.get('mag')),effect:String(form.get('effect')).trim().slice(0,2000),note:String(form.get('note')).trim().slice(0,2000),example:false};if(!sp.name||!sp.effect){toast('Enter a spell name and desired effect.');return;}const i=c.spells.findIndex(x=>x.id===id);if(i>=0)c.spells[i]=sp;else c.spells.unshift(sp);save();closeModal();render();toast('Spell saved.');}else if(e.target.id==='relationship-form'){e.preventDefault();const f=e.target,d=new FormData(f),r={name:String(d.get('name')).slice(0,100),description:String(d.get('description')).slice(0,800),depth:Number(d.get('depth'))};let i=f.dataset.index===''?-1:Number(f.dataset.index);if(i<0)current().relationships.push(r);else current().relationships[i]=r;save();closeModal();render();}else if(e.target.id==='new-character-form'){e.preventDefault();const f=new FormData(e.target),c=fresh(String(f.get('name')||'New Wizard').trim().slice(0,100));if(f.get('preset')==='level1'){c.level=1;c.hp=6;c.paths=[];c.prepared=['Abjuration','Evocation','Illusion'];c.spells=STARTER_SPELLS.map(sp=>({...sp,id:uid()}));}db.characters.push(c);db.activeId=c.id;screen='sheet';save();closeModal();render();toast('New character created.');}});
+if(e.target.id==='spell-form'){e.preventDefault();const f=e.target,form=new FormData(f),c=current(),id=f.dataset.id;const damageRaw=String(form.get('damage') ?? '').trim();const damage=parseDamageFormula(damageRaw);if(damageRaw&&!damage){toast('Enter damage dice like 1d6 or 2d8+1.');return;}const sp={id:id||uid(),...(damage?{damage:damage.formula}:{}),name:String(form.get('name')).trim().slice(0,110),verb:String(form.get('verb')),sub:String(form.get('sub')),category:spellCategory({category:form.get('category')}),mag:String(form.get('mag')),effect:String(form.get('effect')).trim().slice(0,2000),note:String(form.get('note')).trim().slice(0,2000),example:false};if(!sp.name||!sp.effect){toast('Enter a spell name and desired effect.');return;}const i=c.spells.findIndex(x=>x.id===id);if(i>=0)c.spells[i]=sp;else c.spells.unshift(sp);save();closeModal();render();toast('Spell saved.');}else if(e.target.id==='relationship-form'){e.preventDefault();const f=e.target,d=new FormData(f),r={name:String(d.get('name')).slice(0,100),description:String(d.get('description')).slice(0,800),depth:Number(d.get('depth'))};let i=f.dataset.index===''?-1:Number(f.dataset.index);if(i<0)current().relationships.push(r);else current().relationships[i]=r;save();closeModal();render();}else if(e.target.id==='new-character-form'){e.preventDefault();const c=createCharacter(new FormData(e.target));db.characters.push(c);db.activeId=c.id;resetCharacterTools();screen='sheet';save();closeModal();render();toast('New character created.');}});
 document.getElementById('import-file').addEventListener('change',e=>{handleImport(e.target.files?.[0]);e.target.value='';});
 document.getElementById('modal-scrim').addEventListener('click',e=>{if(e.target.id==='modal-scrim')closeModal()});
 document.addEventListener('keydown',e=>{if(e.key==='Escape')closeModal()});
 // Initial data and offline registration
 window.addEventListener('pagehide', () => { if (saveTimer) save(); });
 document.addEventListener('visibilitychange', () => { if (document.hidden && saveTimer) save(); });
+db.characters.forEach(migrateCharacter);
 render();if(!volatile)persist();else updateStatus('Storage unavailable — export backup');document.querySelectorAll('[data-icon]').forEach(el=>el.innerHTML=ico(el.dataset.icon));if('serviceWorker'in navigator&&/^https?:$/.test(location.protocol)){navigator.serviceWorker.register('./sw.js').catch(()=>{});} 
 })();
+

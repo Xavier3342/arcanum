@@ -30,6 +30,7 @@ function openApp(saved = null, random = Math.random) {
     FormData: class { constructor(node) { return new Map(Object.entries(node.fields)); } },
     setTimeout: () => 1, clearTimeout() {}, confirm: () => true,
   };
+  vm.runInNewContext(fs.readFileSync(require.resolve('./rules-data.js'), 'utf8'), context);
   vm.runInNewContext(app.replace(/\}\)\(\);\s*$/, 'window.test = {fresh, normalizeImported}; })();'), context);
   return {
     ...window.test,
@@ -42,6 +43,9 @@ function openApp(saved = null, random = Math.random) {
     },
     change(selector, values) {
       events.get('change')({target: {matches: candidate => candidate === selector, ...values}});
+    },
+    input(selector, values) {
+      events.get('input')({target: {matches: candidate => candidate === selector, ...values}});
     },
     submit(id, fields, dataset = {}) {
       events.get('submit')({preventDefault() {}, target: {id, fields, dataset}});
@@ -72,8 +76,9 @@ test('consolidates sheets without losing the Prodigy or either imported age shee
   assert.equal(profile.id, kid.id);
   assert.equal(profile.hp, 3);
   assert.equal(profile.spells[0].name, 'Existing spell');
-  assert.equal(profile.alwyn.forms.noble.spells[0].name, 'Noble spell');
-  assert.equal(profile.alwyn.forms.sage.spells[0].name, 'Sage spell');
+  assert.ok(profile.spells.some(spell => spell.name === 'Noble spell'));
+  assert.ok(profile.spells.some(spell => spell.name === 'Sage spell'));
+  assert.equal(profile.alwyn.forms.noble.spells, undefined);
   assert.deepEqual(profile.inventory.map(record => record.name), ['Lantern', 'Compass', 'Map']);
   assert.match(app.screen(), /A shared history/);
 });
@@ -91,6 +96,7 @@ test('switching ages shares inventory and wounds while preserving separate build
   app.submit('character-record-form', {...item('', 'Travel cloak'), quantity: '1'}, {key: 'inventory'});
   app.click('alwyn-age', {age: 'sage'});
   assert.match(app.screen(), /Patient/);
+  app.click('nav', {screen: 'equipment'});
   assert.match(app.screen(), /Travel cloak/);
   const profile = app.state().characters[0];
   assert.equal(profile.hp, kid.hp - 1);
@@ -112,6 +118,7 @@ test('the overview and every age read the same campaign journal', () => {
   kid.journalEntries = [{id: 'old', name: 'First session', date: '', details: 'An existing entry'}];
   const app = openApp({characters: [kid], activeId: kid.id});
   app.submit('alwyn-form', {});
+  app.click('nav', {screen: 'notes'});
   assert.match(app.screen(), /Shared campaign journal.*First session/s);
   app.submit('character-record-form', {name: 'The royal library', date: '', details: 'We met the archivist.'}, {key: 'journalEntries'});
   app.click('alwyn-age', {age: 'sage'});
@@ -217,3 +224,143 @@ test('a spell can save a damage formula and roll separately from weapon moves', 
   assert.match(app.element('weapon-damage-form-result').textContent, /Enter damage dice/);
   assert.equal(app.state().characters[0].hp, kid.hp);
 });
+
+test('legacy age spellbooks merge once, retaining conflicts and independent conditions', () => {
+  const kid = openApp().fresh('Alwyn');
+  const noble = structuredClone(kid), sage = structuredClone(kid);
+  kid.conditions.Angry = 'marked';
+  noble.conditions.Distracted = 'locked';
+  noble.spells[0].effect = 'A different version of the same spell';
+  kid.alwyn = {name:'Alwyn', forms:{noble, sage}, personality:{}, overview:''};
+  const app = openApp({characters:[kid], activeId:kid.id});
+  const profile = app.state().characters[0];
+  assert.equal(profile.alwyn.schemaVersion, 2);
+  assert.equal(profile.spells.length, kid.spells.length + 1);
+  assert.equal(new Set(profile.spells.map(spell => spell.id)).size, profile.spells.length);
+  assert.equal(profile.alwyn.forms.noble.conditions.Distracted, 'locked');
+  assert.equal(profile.alwyn.forms.sage.conditions.Distracted, 'clear');
+  assert.equal(profile.alwyn.forms.noble.spells, undefined);
+  assert.deepEqual(openApp(app.state()).state(), app.state());
+  app.click('spell-delete', {id:profile.spells[0].id});
+  assert.equal(openApp(app.state()).state().characters[0].spells.length, profile.spells.length - 1);
+});
+
+test('all Alwyn ages share spell edits while schools and forgotten schools remain separate', () => {
+  const kid = openApp().fresh('Alwyn');
+  const app = openApp({characters:[kid], activeId:kid.id});
+  app.submit('alwyn-form', {});
+  app.submit('spell-form', {name:'Shared gust',verb:'Minor channel',sub:'Elemental energies',category:'Attack',mag:'0',effect:'A gust',note:'',damage:'1d8'});
+  const spell = app.state().characters[0].spells[0];
+  app.click('forget', {school:'Evocation'});
+  app.click('alwyn-age', {age:'noble'});
+  app.click('nav', {screen:'magic'});
+  assert.match(app.screen(), /Cast Shared gust/);
+  assert.doesNotMatch(app.screen(), /Forgotten until Make Camp/);
+  app.submit('spell-form', {...spell,name:'Shared storm'}, {id:spell.id});
+  app.click('alwyn-age', {age:'sage'});
+  app.click('nav', {screen:'magic'});
+  assert.match(app.screen(), /Shared storm/);
+  assert.match(app.screen(), /School unavailable/);
+  const profile = app.state().characters[0];
+  assert.equal(profile.spells.filter(entry=>entry.id===spell.id).length, 1);
+  assert.deepEqual(profile.forgotten, ['Evocation']);
+  assert.deepEqual(profile.alwyn.forms.sage.prepared, ['Illusion','Divination','Abjuration']);
+  const imported = app.normalizeImported(profile);
+  assert.equal(imported.spells[0].name, 'Shared storm');
+  assert.deepEqual(imported.alwyn.forms.sage.prepared, profile.alwyn.forms.sage.prepared);
+});
+
+test('permanent conditions belong to one age and survive clearing, camp, outburst, and import', () => {
+  const kid = openApp().fresh('Alwyn');
+  const app = openApp({characters:[kid],activeId:kid.id});
+  app.submit('alwyn-form', {});
+  app.submit('permanent-conditions-form', {Angry:'on'});
+  app.click('condition', {condition:'Angry',state:'clear'});
+  app.element('camp-condition').value='Angry';
+  app.click('camp-confirm');
+  assert.equal(app.state().characters[0].conditions.Angry,'locked');
+  app.click('alwyn-age', {age:'noble'});
+  app.submit('permanent-conditions-form', {Insecure:'on'});
+  app.click('condition',{condition:'Angry',state:'marked'});
+  app.element('limit-condition').value='Exhausted';
+  app.click('limit-confirm');
+  const profile=app.state().characters[0];
+  assert.equal(profile.conditions.Angry,'locked');
+  assert.equal(profile.alwyn.forms.noble.conditions.Angry,'clear');
+  assert.equal(profile.alwyn.forms.noble.conditions.Insecure,'locked');
+  assert.equal(profile.alwyn.forms.sage.conditions.Insecure,'clear');
+  const imported=app.normalizeImported(profile);
+  assert.deepEqual(Array.from(imported.permanentConditions),['Angry']);
+  assert.deepEqual(Array.from(imported.alwyn.forms.noble.permanentConditions),['Insecure']);
+  app.click('alwyn-age',{age:'prodigy'});
+  app.click('nav',{screen:'play'});
+  app.click('roll');
+  assert.match(app.screen(),/Discarded die/);
+});
+
+test('Play tools rolls saved and legacy spell damage and remembers chosen dice', () => {
+  const kid=openApp().fresh('Alwyn');
+  const spell=kid.spells.find(spell=>spell.name==='Arcane Dart');
+  const app=openApp({characters:[kid],activeId:kid.id},()=>0.5);
+  app.click('nav',{screen:'play'});
+  assert.match(app.screen(),/Spell damage/);
+  app.change('',{id:'play-attack-spell',value:spell.id});
+  assert.match(app.screen(),/name="formula" value="1d4"/);
+  app.submit('play-spell-damage-form',{formula:'2d4+1',mode:'normal'},{spellId:spell.id});
+  assert.match(app.element('play-spell-damage-form-result').innerHTML,/7 damage/);
+  assert.equal(app.state().characters[0].spells.find(entry=>entry.id===spell.id).damage,'2d4+1');
+  app.click('roll');
+  assert.match(app.screen(),/7 damage/);
+  app.click('spell-cast',{id:spell.id});
+  assert.match(app.element('modal-content').innerHTML,/name="formula" value="2d4\+1"/);
+});
+
+test('all navigation pages render, Play tools comes second, and quick dice opens from any page', () => {
+  const app=openApp();
+  const desktop=app.element('nav-desktop').innerHTML;
+  assert.ok(desktop.indexOf('data-screen="play"')<desktop.indexOf('data-screen="magic"'));
+  for(const screen of ['sheet','play','magic','paths','equipment','notes','rules','characters','saves']){
+    app.click('nav',{screen});
+    assert.ok(app.screen().includes('pagehead'),screen);
+    const stack=[];
+    for(const match of app.screen().matchAll(/<(\/?)([a-z][a-z0-9-]*)\b[^>]*>/gi)){
+      const tag=match[2].toLowerCase();
+      if(['input','img','br','hr','path','circle','rect'].includes(tag)||match[0].endsWith('/>'))continue;
+      if(match[1])assert.equal(stack.pop(),tag,screen+' closing '+tag);
+      else stack.push(tag);
+    }
+    assert.equal(stack.length,0,screen+' unclosed tags');
+    app.click('quick-roll');
+    assert.equal(app.element('modal-title').textContent,'Roll dice');
+    app.click('close-modal');
+  }
+  app.click('nav',{screen:'magic'});
+  assert.doesNotMatch(app.screen(),/id="quick-dice-form"/);
+  assert.match(app.screen(),/spellbook-scroll/);
+  app.click('more-nav');
+  assert.match(app.element('modal-content').innerHTML,/data-screen="equipment"/);
+});
+
+test('rules reference searches every class and characters can acquire and retain multiclass Paths', () => {
+  const app=openApp();
+  app.click('nav',{screen:'rules'});
+  assert.match(app.screen(),/Barbarian/);
+  assert.match(app.screen(),/Wizard/);
+  app.input('[data-rules-search]',{value:'Mirror Image'});
+  assert.match(app.element('rules-results').innerHTML,/Mirror Image/);
+  assert.doesNotMatch(app.element('rules-results').innerHTML,/Ancestral longsword/);
+  app.submit('new-character-form',{name:'Swordsage',className:'Fighter',multiclassPath:'Illusionist'});
+  const profile=app.state().characters.find(character=>character.name==='Swordsage');
+  assert.equal(profile.hp,10);
+  assert.equal(profile.className,'Fighter');
+  assert.equal(profile.focus,'');
+  assert.deepEqual(profile.paths,['Illusionist']);
+  app.click('class-path',{path:'Fighter::bulwark'});
+  app.click('class-move',{path:'Fighter::bulwark',move:'Fighter::bulwark::armiger'});
+  const restored=app.normalizeImported(app.state().characters.find(character=>character.id===profile.id));
+  assert.deepEqual(restored.paths,['Illusionist','Fighter::bulwark']);
+  assert.deepEqual(restored.moves,['Fighter::bulwark::armiger']);
+  app.click('class-path',{path:'Fighter::bulwark'});
+  assert.deepEqual(app.state().characters.find(character=>character.id===profile.id).moves,[]);
+});
+

@@ -79,9 +79,63 @@
   gap: 9px;
 }
 .damage-result { grid-column: 1 / -1; }
+
+/* Focused workspaces: short navigation, contained spell lists, reusable dice controls. */
+.sidebar { overflow-y: auto; }
+.sidebar .brand { padding-bottom: 24px; }
+.nav-item { padding-block: 10px; }
+.magic-layout { grid-template-columns: minmax(280px, .9fr) minmax(0, 1.35fr); align-items: start; }
+.magic-layout > .block-stack { min-width: 0; align-content: start; }
+.spellbook-scroll { max-height: min(72vh, 850px); overflow-y: auto; overscroll-behavior: contain; scrollbar-gutter: stable; padding-right: 6px; }
+.spellbook-scroll:focus-visible { outline: 2px solid var(--accent); outline-offset: 4px; }
+.spellbook-panel .spell-grid { grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr)); }
+.reference-grid { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 14px; align-items: start; }
+.reference-grid > .card { margin: 0; }
+.reference-entry { padding: 16px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface-2); overflow-wrap: anywhere; }
+.reference-entry summary { cursor: pointer; }
+.reference-entry summary span { display: block; margin-top: 5px; }
+.reference-entry p { margin: 12px 0 0; }
+.rules-search { display: block; margin-top: 20px; }
+.path-filters { margin: 18px 0; }
+.current-character { border-color: var(--accent); }
+.dice-builder { border: 0; padding: 0; margin: 0; min-width: 0; }
+.dice-builder legend { font-size: 14px; margin-bottom: 8px; color: var(--muted); }
+.dice-builder > .spell-availability { margin-bottom: 10px; }
+.dice-controls { display: grid; grid-template-columns: .9fr 1.1fr 1fr; gap: 8px; }
+.dice-builder output { display: block; margin-top: 7px; }
+.damage-roller { grid-template-columns: minmax(0,1.6fr) minmax(0,1fr); }
+.damage-roller > button { grid-column: 1/-1; }
+.damage-roller > .dice-builder { grid-column: 1/-1; }
+.condition-list { margin-top: 14px; }
+.quick-dice { margin-top: 0; }
+.top-actions .primary { color: var(--accent); background: var(--accent-glow); }
+.sidebar-group-label { font-size: 11px; }
+.field-label, .small, .btn, .pagehead p { font-size: 14px; }
+.micro, .footnote, .pill { font-size: 12px; }
+.nav-item span { font-size: 14px; }
+.spell-card p, .path-move p, .school-desc, .school-verbs, .condition-sub { font-size: 14px; }
+.spell-card h3 { font-size: 20px; }
+.reference-grid h2 { margin-top: 0; }
+@media (max-width: 1050px) {
+  .magic-layout { grid-template-columns: minmax(0,1fr); }
+  .spellbook-scroll { max-height: 65vh; }
+}
+@media (max-width: 720px) {
+  .reference-grid { grid-template-columns: minmax(0,1fr); }
+  .topbar-left { min-width: 0; }
+  .top-title span { max-width: 150px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .top-title strong { font-size: 17px; }
+  .top-actions { flex-shrink: 0; }
+  .mobile-nav { overflow: hidden; }
+  .field-label, .small, .btn, .pagehead p { font-size: 14px; }
+}
+@media print {
+  .spellbook-scroll { max-height: none; overflow: visible; }
+}
 .damage-result:not(:empty) { margin-top: 0; }
 
 @media (max-width: 540px) {
   .damage-roller { grid-template-columns: minmax(0, 1fr) minmax(0, 1.25fr); }
   .damage-roller button { grid-column: 1 / -1; }
 }
+

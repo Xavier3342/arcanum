@@ -4,8 +4,8 @@
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"/>
 <meta name="theme-color" content="#111827"/>
-<meta name="description" content="Offline-first mobile character keeper for Dungeon World 2 Beta v3 Wizards."/>
-<title>Arcanum — DW2 Wizard Keeper</title>
+<meta name="description" content="Offline-first Dungeon World 2 character sheets, spellbooks, equipment, journal, and rules reference."/>
+<title>Arcanum — DW2 Character Keeper</title>
 <link rel="icon" href="./icon.svg" type="image/svg+xml"/>
 <link rel="manifest" href="./manifest.webmanifest"/>
 <link rel="stylesheet" href="./styles.css"/>
@@ -20,7 +20,7 @@
     <div class="sidebar-bottom"><div class="sidebar-note"><span class="status-light"></span>Offline-first · Beta v3</div><button class="sidebar-backup" data-action="export"><span data-icon="download"></span> Export backup</button></div>
   </aside>
   <div class="main-wrap">
-    <header class="topbar"><div class="topbar-left"><span class="mobile-mark">✦</span><div class="top-title"><span id="page-eyebrow">YOUR CHARACTER</span><strong id="page-title">Overview</strong></div></div><div class="top-actions"><span id="save-status" class="save-status" aria-live="polite">Saved locally</span><button class="icon-btn" title="Switch appearance" aria-label="Switch appearance" data-action="theme"><span data-icon="moon"></span></button><button class="icon-btn" title="Export backup" aria-label="Export backup" data-action="export"><span data-icon="download"></span></button></div></header>
+    <header class="topbar"><div class="topbar-left"><span class="mobile-mark">✦</span><div class="top-title"><span id="page-eyebrow">YOUR CHARACTER</span><strong id="page-title">Overview</strong></div></div><div class="top-actions"><button class="icon-btn primary" title="Roll any dice" aria-label="Roll any dice" data-action="quick-roll"><span data-icon="dice"></span></button><span id="save-status" class="save-status" aria-live="polite">Saved locally</span><button class="icon-btn" title="Switch appearance" aria-label="Switch appearance" data-action="theme"><span data-icon="moon"></span></button><button class="icon-btn" title="Export backup" aria-label="Export backup" data-action="export"><span data-icon="download"></span></button></div></header>
     <main class="main-content" id="screen" tabindex="-1"></main>
   </div>
   <nav class="mobile-nav" id="nav-mobile" aria-label="Mobile navigation"></nav>
@@ -30,6 +30,8 @@
 <input type="file" id="import-file" accept=".json,application/json" hidden/>
 <script src="./drive-config.js" defer></script>
 <script src="./drive-sync.js" defer></script>
+<script src="./rules-data.js" defer></script>
 <script src="./app.js" defer></script>
 </body>
 </html>
+

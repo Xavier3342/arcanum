@@ -1,57 +1,68 @@
-ARCANUM — DW2 BETA V3 WIZARD KEEPER
-====================================
+ARCANUM - DUNGEON WORLD 2 CHARACTER KEEPER
+========================================
 
-This is a standalone, mobile-friendly wizard character creator and keeper.
-It is an unofficial tool based on the uploaded DW2 Beta v3 Character Keeper.
-It does not include the whole game rulebook.
+Live app: https://xavier3342.github.io/arcanum/
+Offline-first character sheets with optional Google Drive synchronization.
+An unofficial tool for Dungeon World 2 Beta v3. Reference entries are summaries,
+not the full rulebook. Some Path excerpts are abbreviated and show a page reference.
 
-QUICK START — DESKTOP
----------------------
-Open the separately supplied Arcanum-DW2-Wizard-Keeper.html file in a current
-browser. No installation or accounts are required.
+NAVIGATION
+----------
+Sheet, Play tools, Spellbook, Paths & growth, Equipment, Campaign journal,
+Rules & reference, Character library, App & saves.
+On phones, More opens the remaining destinations. The top-bar dice button
+opens the general roller from every screen. Move and damage rolls stay in context.
 
-IMPORTANT: Browser storage for local HTML files can behave differently between
-browsers, and clearing browser data may erase saved characters. Export backups.
+ALWYN'S THREE AGES
+-----------------
+One shared spell library, inventory, campaign journal, HP, XP, level, and INT.
+Each age keeps its own prepared/forgotten schools, Paths, moves, non-INT stats,
+Conditions, permanent Conditions, appearance, backstory, and personal notes.
+Existing age spellbooks merge automatically on first load. Identical entries are
+deduplicated; different spell versions are retained, even if they shared an ID.
+Removing a shared spell removes it for every age.
 
-RECOMMENDED — PHONE / INSTALLABLE WEB APP
------------------------------------------
-To use as a proper offline-capable app on desktop and mobile, host the files
-from this ZIP on an HTTPS website. It is a static site and needs no backend.
+Use Permanent conditions on Sheet or Play tools to record the GM's permanent
+Condition for the active age. Camp and outbursts never remove those Conditions.
+Unchecking a permanent Condition makes it removable; it remains locked until
+you clear it explicitly.
 
-Example GitHub Pages route:
-1. Create a repository for this site in your GitHub account.
-2. Place index.html, app.js, styles.css, manifest.webmanifest, sw.js,
-   and icon.svg in the repository root.
-3. In Settings > Pages, publish from the main branch root folder.
-4. Open the resulting HTTPS URL in your phone's browser.
-5. On Android Chrome, choose Install app / Add to Home screen.
-   On iPhone Safari, choose Share > Add to Home Screen.
-6. Open it once while online. Its service worker caches the app for offline use.
+SPELL DAMAGE
+------------
+Set the number of dice, die size, and bonus in the spell editor or cast dialog.
+Existing dice written in a spell's effect/ruling are used as a starting value.
+Damage rolled for a selected spell is saved for future casts. Play tools includes
+spell damage when Cast a Spell is selected. Rolls do not change target HP.
 
-Notes:
-- The same URL works on desktops and phones.
-- Characters are stored locally within each browser and device. There is NO
-  automatic cloud synchronization. Export JSON on one device and Import JSON
-  on another to transfer characters.
-- Export a JSON backup after significant changes, and keep it in a trusted
-  location such as your personal cloud drive.
-- Import MERGES backed-up characters; it never overwrites existing characters.
-- Some browsers may delete site data if storage is cleared. Backups are essential.
-- A site update may require reopening the app while online to fetch new files.
-- Spell ideas are illustrative; the GM must approve whether they are legal and
-  assign Magnitude. The app does not replace the official rules.
+CHARACTERS & MULTICLASS
+----------------------
+Create, open, duplicate, and delete characters from Character library. Creation
+supports nine base classes and an optional GM-approved multiclass Path.
+Acquire additional class or multiclass Paths and individual moves in Paths & growth.
+Review stats and starting equipment with the GM; class-specific narrative choices
+are recorded on the sheet and in inventory rather than enforced automatically.
 
-FEATURES
---------
-* Multiple Wizards, duplicate/open/delete
-* HP, experience, stats, Condition states, equipment uses, appearance, origin
-* Illusionist, Evoker and Necromancer Path rules and individual Path Moves
-* 8 Schools of Magic, spell formula reference, Path bonus schools
-* Custom spellbook and spell editor with GM rulings
-* 2d6 / advantage / disadvantage dice roller, Cast a Spell magnitude checks
-* Combat reference, Make Camp, Reach Your Limit
-* Relationship and campaign notes
-* Dark/light theme, print, JSON backup/import
+SAVES & HOSTING
+---------------
+Existing local-storage keys, JSON backup format, and Drive sync remain compatible.
+App & saves contains Drive connection, export/import, theme, and print tools.
+Import adds copies rather than replacing existing characters. See DRIVE_SYNC.md
+for Drive configuration. Export backups before clearing browser storage.
 
-RULES VERSION: Dungeon World 2 Beta v3, October 9, 2026
-SOURCE EXPORT: Character Keeper - DW2 Beta v3.zip (provided by user)
+Host these static files together on HTTPS (GitHub Pages uses main, repository root).
+Open once online to cache the app. Offline assets include rules-data.js.
+After an update, reload online; a second reload may be needed for a previously
+open service-worker-controlled tab.
+
+VALIDATION
+----------
+node --check app.js
+node --test alwyn.test.cjs drive-sync.test.cjs
+
+CREDITS
+-------
+Navigation and character-library inspiration, class/Path reference summaries,
+equipment catalog, and core/GM reference data adapted from Charles Blanche's
+Nocturne Beta: https://charlesblanche.github.io/Nocturne-Beta/
+Dungeon World 2 rules remain the work of their respective authors.
+
