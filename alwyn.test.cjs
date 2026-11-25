@@ -91,7 +91,7 @@ test('mobile workspace switches preserve spell filters, damage mode, and move ro
   app.click('workspace-section', {section: 'roll'});
   assert.match(app.screen(), /class="dice-result">10/);
 
-  app.change('[data-bind]', {dataset: {bind: '__diceMode'}, value: 'dodge'});
+  app.change('[data-bind]', {dataset: {bind: '__diceMode'}, value: 'dex'});
   app.click('workspace-section', {section: 'damage'});
   assert.match(app.screen(), selected('damage'));
   assert.match(app.screen(), /id="play-damage-form"/);
@@ -439,24 +439,23 @@ test('dice selectors contain only 1–5 dice and −1 to +5 without option group
   assert.match(app.element('play-damage-form-result').textContent, /Choose up to 5 dice/);
 });
 
-test('Play tools rolls common moves using their attributes or move-specific bonuses', () => {
+test('Play tools lists attribute rolls, casting, and Trade Blows', () => {
   const app = openApp(null, () => 0.5);
   app.click('nav', {screen: 'play'});
-  const move = id => app.change('[data-bind]', {dataset: {bind: '__diceMode'}, value: id});
-  const roll = total => {
+  const options = app.screen().match(/<select data-bind="__diceMode">([\s\S]*?)<\/select>/)[1];
+  assert.deepEqual([...options.matchAll(/<option[^>]*>([^<]+)<\/option>/g)].map(match => match[1]),
+    ['STR', 'DEX', 'INT', 'WIS', 'CHA', 'Cast a Spell', 'Trade Blows (STR)', 'Trade Blows (DEX)']);
+  const rollType = id => app.change('[data-bind]', {dataset: {bind: '__diceMode'}, value: id});
+  const damageShortcut = /class="btn mobile-workspace" data-action="workspace-section" data-section="damage"/;
+  const rolls = [['str', 7], ['dex', 9], ['int', 10], ['wis', 8], ['cha', 8],
+    ['cast', 10], ['melee', 7], ['ranged', 9]];
+  for (const [id, total] of rolls) {
+    rollType(id);
+    assert.equal(/id="dice-mag"/.test(app.screen()), id === 'cast');
+    assert.equal(damageShortcut.test(app.screen()), ['cast', 'melee', 'ranged'].includes(id));
     app.click('roll');
     assert.match(app.screen(), new RegExp(`class="dice-result">${total}<`));
-  };
-  for (const [id, total] of [['force', 7], ['pull', 8], ['sense', 8], ['unearth', 10], ['gamble', 8]]) {
-    move(id);
-    roll(total);
   }
-  move('lore');
-  app.change('', {id: 'lore-answers', value: '3'});
-  roll(11);
-  move('journey');
-  app.change('', {id: 'journey-pace', value: '-1'});
-  roll(7);
 });
 
 test('legacy Alwyn gear migrates once and only equipped items grant effects or presets', () => {
@@ -488,7 +487,7 @@ test('legacy Alwyn gear migrates once and only equipped items grant effects or p
   assert.match(app.screen(), /Charm Bow · 1d8/);
   app.change('', {id: 'play-damage-preset', value: 'weapon:charm-bow'});
   assert.match(app.screen(), /name="formula" value="1d8"/);
-  app.change('[data-bind]', {dataset: {bind: '__diceMode'}, value: 'pull'});
+  app.change('[data-bind]', {dataset: {bind: '__diceMode'}, value: 'cha'});
   app.click('roll');
   assert.match(app.screen(), /class="dice-result">10</);
   app.click('heal-full');

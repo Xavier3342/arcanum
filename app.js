@@ -113,7 +113,6 @@ let libraryTrigger;
 let libraryReturn;
 let hideUnavailable = false;
 let playDamage = {}, playDamagePreset = '', rulesCategory = 'All', rulesSearch = '', pathClassFilter = 'All';
-let loreAnswers = '0', journeyPace = '1';
 const spellCategories = ['Defense', 'Mobility', 'Control', 'Attack', 'Utility', 'Other'];
 const diceSides = [3, 6, 8, 10, 12, 20];
 const currentCharacter=()=>db.characters.find(c=>c.id===db.activeId)||db.characters[0];
@@ -671,37 +670,23 @@ ${infoCard('Available combinations',`<div class="cols-3" style="grid-template-co
 function renderPaths(){const c=current();return pagehead('Path of the arcane','Acquire Paths, unlock verbs, and track individual Path Moves as you level up.')+`<div class="cols-2"><div class="block-stack">${infoCard('Your advancement plan',`<div class="flex-spread"><div><div class="field-label">Current level</div><div class="meter-value">${c.level}</div></div>${pill(`${c.paths.length} Paths owned`,'accent')}</div><div class="separator"></div><p class="small muted">Gaining a Path grants only its Starting Move. Other Path Moves require separate advancements. Your first Path is normally gained by leveling up from level 1.</p><label class="field-label" for="advances">Advancement history / choices</label><textarea id="advances" data-bind="advancementNotes" placeholder="Level 2 — Illusionist Path\nLevel 3 — Mirror Image…">${esc(c.advancementNotes||'')}</textarea>`)}
 ${infoCard('Spellcasting rules',`<p class="small muted">Prepare 3 schools. An owned Path’s school can be prepared in addition to the normal three. Cast a Spell uses +INT and the GM sets the spell’s Magnitude.</p><div class="group-list"><div class="group-item"><span>MAG below INT</span>${pill('Normal roll','mint')}</div><div class="group-item"><span>MAG equal to INT</span>${pill('Disadvantage','amber')}</div><div class="group-item"><span>MAG above INT</span>${pill('Too powerful','danger')}</div></div><div class="separator"></div><p class="footnote">For a 7–9, your Wizard may mark a Condition, accept a GM twist, or forget a prepared school until Make Camp. Casting requires your focus, both hands otherwise free, and the ability to speak aloud.</p>`)}
 </div><div class="block-stack">${PATHS.map(p=>`<section class="path-panel"><div class="path-panel-head"><div><h3>${p.id}</h3><div class="small muted">${esc(p.tag)}</div></div><button class="btn ${hasPath(c,p.id)?'primary':''}" data-action="path" data-path="${p.id}">${hasPath(c,p.id)?ico('check')+' Acquired':'Acquire'}</button></div><div class="separator"></div><div class="pillbar">${pill(p.school,'accent')}${p.extra.map(s=>pill(s)).join('')}</div><p class="small muted" style="margin-top:12px"><strong style="color:var(--text)">${esc(p.starting)}:</strong> ${esc(p.startingDesc)}</p><div style="margin-top:17px"><div class="field-label">Path Moves — gained separately</div>${p.moves.map(m=>`<div class="path-move"><div class="path-move-head"><strong>${esc(m.id)}</strong><button class="btn tiny ${c.moves.includes(m.id)?'primary':''}" data-action="move" data-move="${esc(m.id)}" data-path="${p.id}" ${!hasPath(c,p.id)?'disabled':''}>${c.moves.includes(m.id)?'Learned':'Learn'}</button></div><p>${esc(m.desc)}</p></div>`).join('')}</div></section>`).join('')}</div></div>`;}
-const playMoves = [
+const playRollTypes = [
+  ...attributes.map(stat => ({id: stat.toLowerCase(), name: stat, stat})),
   {id: 'cast', name: 'Cast a Spell'},
-  {id: 'melee', name: 'Trade Blows · melee (STR)', stat: 'STR'},
-  {id: 'ranged', name: 'Trade Blows · ranged or precise (DEX)', stat: 'DEX'},
-  {id: 'force', name: 'Defy Danger · force (STR)', stat: 'STR'},
-  {id: 'dodge', name: 'Defy Danger · dodge (DEX)', stat: 'DEX'},
-  {id: 'outsmart', name: 'Defy Danger · outsmart (INT)', stat: 'INT'},
-  {id: 'wis', name: 'Defy Danger · resist (WIS)', stat: 'WIS'},
-  {id: 'cha', name: 'Defy Danger · trick (CHA)', stat: 'CHA'},
-  {id: 'pull', name: 'Pull Strings', stat: 'CHA'},
-  {id: 'sense', name: 'Sense Motive', stat: 'WIS'},
-  {id: 'sneak', name: 'Sneak Past', stat: 'DEX'},
-  {id: 'lore', name: 'Spout Lore'},
-  {id: 'unearth', name: 'Unearth Secrets', stat: 'INT'},
-  {id: 'journey', name: 'Undertake a Perilous Journey'},
-  {id: 'gamble', name: 'Face Death · Gamble with Death'},
+  {id: 'melee', name: 'Trade Blows (STR)', stat: 'STR'},
+  {id: 'ranged', name: 'Trade Blows (DEX)', stat: 'DEX'},
 ];
 
 function playRollCard() {
   const {stat, modifier, condition, atLimit, tooHigh} = playRollSpec();
   const penalties = [condition?.name, atLimit ? 'MAG equals ' + stat : ''].filter(Boolean);
-  const formula = stat ? `2d6 + ${stat} (${fmtSign(modifier)})` : `2d6 ${fmtSign(modifier)}`;
+  const formula = `2d6 + ${stat} (${fmtSign(modifier)})`;
   return `<section class="card play-roll-card">
     <div class="card-title"><h2>Dice roller</h2></div>
     <div class="play-roll-fields">
-      ${select('Move', '__diceMode', diceMode, playMoves)}
+      ${select('Roll type', '__diceMode', diceMode, playRollTypes)}
       <div class="field-grid">
         ${diceMode === 'cast' ? magnitudeSelect('id="dice-mag"', diceMag, '?') : ''}
-        ${diceMode === 'lore' ? `<label><span class="field-label">Yes answers</span><select id="lore-answers">${numberOptions(0, 3, loreAnswers)}</select></label>` : ''}
-        ${diceMode === 'journey' ? `<label><span class="field-label">Travel pace</span><select id="journey-pace">
-          ${[[-1, 'Quickly (−1)'], [1, 'Regularly (+1)'], [2, 'Slowly (+2)']].map(([value, name]) => diceOption(value, journeyPace, name)).join('')}</select></label>` : ''}
         ${rollModifierSelect('id="dice-extra"', diceExtra)}
       </div>
     </div>
@@ -1261,9 +1246,9 @@ function rollDamage(form) {
 
 const spellcastingStat = c => ['Cleric', 'Druid'].includes(c.className) ? 'WIS' : 'INT';
 
-function moveRollSpec(c, stat, extra, mag, fixedBonus = 0) {
-  const modifier = stat ? effectiveStat(c, stat) : fixedBonus;
-  const condition = stat && CONDITIONS.find(entry => entry.stat === stat && c.conditions[entry.name] !== 'clear');
+function moveRollSpec(c, stat, extra, mag) {
+  const modifier = effectiveStat(c, stat);
+  const condition = CONDITIONS.find(entry => entry.stat === stat && c.conditions[entry.name] !== 'clear');
   const atLimit = mag !== null && mag === modifier;
   const tooHigh = mag !== null && mag > modifier;
   const balance = (extra === 'advantage' ? 1 : extra === 'disadvantage' ? -1 : 0)
@@ -1408,9 +1393,8 @@ function handleImport(file){if(!file)return;const reader=new FileReader();reader
 function playRollSpec() {
   const c = current();
   const mag = diceMode === 'cast' && diceMag !== '?' ? Number(diceMag) : null;
-  const stat = diceMode === 'cast' ? spellcastingStat(c) : playMoves.find(move => move.id === diceMode)?.stat;
-  const fixed = diceMode === 'lore' ? Number(loreAnswers) : diceMode === 'journey' ? Number(journeyPace) : 0;
-  return moveRollSpec(c, stat, diceExtra, mag, fixed);
+  const stat = diceMode === 'cast' ? spellcastingStat(c) : playRollTypes.find(type => type.id === diceMode)?.stat || 'INT';
+  return moveRollSpec(c, stat, diceExtra, mag);
 }
 
 function roll() {
@@ -1545,8 +1529,6 @@ if(a.id==='new-character-class'){
 if(a.id==='inventory-type')document.getElementById('inventory-damage').hidden=a.value!=='true';
 if(a.id==='play-damage-preset'){playDamagePreset=a.value;playDamage={};render();
   document.getElementById('play-damage-preset').focus?.({preventScroll:true});}
-if(a.id==='lore-answers'){loreAnswers=a.value;diceLast=null;render();}
-if(a.id==='journey-pace'){journeyPace=a.value;diceLast=null;render();}
 if(a.form?.id==='play-damage-form' && a.name==='mode'){
   playDamage = {...playDamage, mode: a.value, result: null};
   document.getElementById('play-damage-form-result').textContent = '';
