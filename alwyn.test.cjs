@@ -397,6 +397,7 @@ test('Play tools rolls saved and legacy spell damage and remembers chosen dice',
   const app=openApp({characters:[kid],activeId:kid.id},()=>0.5);
   app.click('nav',{screen:'play'});
   assert.match(app.screen(),/Attack spells/);
+  assert.match(app.screen(),/>Arcane Dart · 1d4<\/option>/);
   app.change('',{id:'play-damage-preset',value:'spell:'+spell.id});
   assert.match(app.screen(),/name="formula" value="1d4"/);
   assert.match(app.screen(),/<option value="4" selected disabled hidden>d4 \(preset\)<\/option>/);
@@ -407,6 +408,13 @@ test('Play tools rolls saved and legacy spell damage and remembers chosen dice',
   assert.match(app.screen(),/7 damage/);
   app.click('spell-cast',{id:spell.id});
   assert.match(app.element('modal-content').innerHTML,/name="formula" value="1d4"/);
+  app.click('close-modal');
+  app.click('forget', {school: 'Evocation'});
+  assert.doesNotMatch(app.screen(), /Arcane Dart|School unavailable|Attack spells|7 damage/);
+  assert.match(app.screen(), /name="formula" value="1d6"/);
+  app.click('remember', {school: 'Evocation'});
+  assert.match(app.screen(), />Arcane Dart · 1d4<\/option>/);
+  assert.match(app.screen(), /name="formula" value="1d6"/);
 });
 
 test('dice selectors contain only 1–5 dice and −1 to +5 without option groups', () => {

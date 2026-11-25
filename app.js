@@ -898,8 +898,8 @@ function spellDamageFormula(spell) {
 
 function damagePresets(c) {
   return [
-    ['Attack spells', c.spells.filter(spell => spellCategory(spell) === 'Attack').map(spell => ({
-      id: 'spell:' + spell.id, name: spell.name, formula: spellDamageFormula(spell), unavailable: !canCastSpell(c, spell),
+    ['Attack spells', c.spells.filter(spell => spellCategory(spell) === 'Attack' && canCastSpell(c, spell)).map(spell => ({
+      id: 'spell:' + spell.id, name: spell.name, formula: spellDamageFormula(spell),
     })).filter(preset => preset.formula)],
     ['Equipped weapons', c.inventory.filter(item => item.equipped && item.weapon && item.damage).map(item => ({
       id: 'weapon:' + item.id, name: item.name, formula: item.damage,
@@ -910,12 +910,15 @@ function damagePresets(c) {
 function playDamageCard(c) {
   const groups = damagePresets(c);
   const preset = groups.flatMap(([, presets]) => presets).find(entry => entry.id === playDamagePreset);
-  const selection = preset?.id || '';
-  const values = playDamagePreset === selection ? {formula: preset?.formula, ...playDamage} : {};
+  if (playDamagePreset && !preset) {
+    playDamagePreset = '';
+    playDamage = {};
+  }
+  const values = {formula: preset?.formula, ...playDamage};
   return infoCard('Damage roll', `<div class="block-stack">
     <label><span class="field-label">Damage preset</span><select id="play-damage-preset"><option value="">Choose dice manually</option>
       ${groups.filter(([, entries]) => entries.length).map(([label, entries]) => `<optgroup label="${label}">${entries.map(entry =>
-        diceOption(entry.id, selection, `${entry.name} · ${entry.formula}${entry.unavailable ? ' · School unavailable' : ''}`)).join('')}</optgroup>`).join('')}
+        diceOption(entry.id, playDamagePreset, `${entry.name} · ${entry.formula}`)).join('')}</optgroup>`).join('')}
     </select></label>${damageRoller('play-damage-form', values)}</div>`);
 }
 
