@@ -27,12 +27,14 @@ Condition for the active age. Camp and outbursts never remove those Conditions.
 Unchecking a permanent Condition makes it removable; it remains locked until
 you clear it explicitly.
 
-SPELL DAMAGE
-------------
-Set the number of dice, die size, and bonus in the spell editor or cast dialog.
-Existing dice written in a spell's effect/ruling are used as a starting value.
-Damage rolled for a selected spell is saved for future casts. Play tools includes
-spell damage when Cast a Spell is selected. Rolls do not change target HP.
+DAMAGE & INVENTORY
+------------------
+Play tools lists attack spells with damage dice and equipped weapons in one
+damage preset menu. Adjustments there apply to the current roll.
+Set a spell's default damage in its editor, or roll damage from its cast dialog.
+Existing dice in a spell's effect or ruling are used as starting values.
+Starting gear becomes inventory items. Edit an item to track its uses,
+keywords, weapon damage, and bonuses that apply while equipped.
 
 CHARACTERS & MULTICLASS
 ----------------------

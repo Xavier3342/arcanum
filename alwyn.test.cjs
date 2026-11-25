@@ -80,8 +80,8 @@ test('mobile workspace switches preserve spell filters, damage mode, and move ro
   app.click('roll');
   app.click('workspace-section', {section: 'damage'});
   assert.match(app.screen(), selected('damage'));
-  assert.match(app.screen(), /id="play-spell-damage-form"/);
-  app.change('', {form: {id: 'play-spell-damage-form'}, name: 'mode', value: 'maximum'});
+  assert.match(app.screen(), /id="play-damage-form"/);
+  app.change('', {form: {id: 'play-damage-form'}, name: 'mode', value: 'maximum'});
   app.click('workspace-section', {section: 'status'});
   app.click('hp', {delta: '-1'});
   assert.match(app.screen(), selected('status'));
@@ -93,10 +93,9 @@ test('mobile workspace switches preserve spell filters, damage mode, and move ro
 
   app.change('[data-bind]', {dataset: {bind: '__diceMode'}, value: 'dodge'});
   app.click('workspace-section', {section: 'damage'});
-  assert.match(app.screen(), /data-action="damage-move" data-move="melee"/);
-  app.click('damage-move', {move: 'melee'});
   assert.match(app.screen(), selected('damage'));
-  assert.match(app.screen(), /id="weapon-damage-form"/);
+  assert.match(app.screen(), /id="play-damage-form"/);
+  assert.match(app.screen(), /value="maximum" selected/);
 });
 
 test('mobile swipe switches adjacent sections and ignores vertical scrolling and controls', () => {
@@ -173,7 +172,8 @@ test('consolidates sheets without losing the Prodigy or either imported age shee
   assert.ok(profile.spells.some(spell => spell.name === 'Noble spell'));
   assert.ok(profile.spells.some(spell => spell.name === 'Sage spell'));
   assert.equal(profile.alwyn.forms.noble.spells, undefined);
-  assert.deepEqual(profile.inventory.map(record => record.name), ['Lantern', 'Compass', 'Map']);
+  assert.deepEqual(profile.inventory.map(record => record.name),
+    ['Lantern', 'Bejeweled skull cap', 'Adventuring gear', 'Potion of healing', 'Compass', 'Map']);
   assert.match(app.screen(), /A shared history/);
 });
 
@@ -307,15 +307,14 @@ test('a spell can save a damage formula and roll separately from weapon moves', 
   assert.match(app.element('spell-damage-form-result').innerHTML, /9 damage/);
   app.click('close-modal');
   app.click('nav', {screen: 'play'});
-  assert.doesNotMatch(app.screen(), /Weapon damage/);
   app.change('[data-bind]', {dataset: {bind: '__diceMode'}, value: 'melee'});
-  assert.match(app.screen(), /Weapon damage/);
-  app.submit('weapon-damage-form', {formula: 'd8+2', mode: 'minimum'});
-  assert.match(app.element('weapon-damage-form-result').innerHTML, /3 damage/);
+  assert.match(app.screen(), /Damage roll/);
+  app.submit('play-damage-form', {formula: 'd8+2', mode: 'minimum'});
+  assert.match(app.element('play-damage-form-result').innerHTML, /3 damage/);
   app.click('roll');
   assert.match(app.screen(), /3 damage/);
-  app.submit('weapon-damage-form', {formula: '0d6', mode: 'normal'});
-  assert.match(app.element('weapon-damage-form-result').textContent, /Choose the damage dice/);
+  app.submit('play-damage-form', {formula: '0d6', mode: 'normal'});
+  assert.match(app.element('play-damage-form-result').textContent, /Choose the damage dice/);
   assert.equal(app.state().characters[0].hp, kid.hp);
 });
 
@@ -397,16 +396,101 @@ test('Play tools rolls saved and legacy spell damage and remembers chosen dice',
   const spell=kid.spells.find(spell=>spell.name==='Arcane Dart');
   const app=openApp({characters:[kid],activeId:kid.id},()=>0.5);
   app.click('nav',{screen:'play'});
-  assert.match(app.screen(),/Spell damage/);
-  app.change('',{id:'play-attack-spell',value:spell.id});
+  assert.match(app.screen(),/Attack spells/);
+  app.change('',{id:'play-damage-preset',value:'spell:'+spell.id});
   assert.match(app.screen(),/name="formula" value="1d4"/);
-  app.submit('play-spell-damage-form',{formula:'2d4+1',mode:'normal'},{spellId:spell.id});
-  assert.match(app.element('play-spell-damage-form-result').innerHTML,/7 damage/);
-  assert.equal(app.state().characters[0].spells.find(entry=>entry.id===spell.id).damage,'2d4+1');
+  app.submit('play-damage-form',{formula:'2d4+1',mode:'normal'});
+  assert.match(app.element('play-damage-form-result').innerHTML,/7 damage/);
+  assert.equal(app.state().characters[0].spells.find(entry=>entry.id===spell.id).damage,spell.damage);
   app.click('roll');
   assert.match(app.screen(),/7 damage/);
   app.click('spell-cast',{id:spell.id});
-  assert.match(app.element('modal-content').innerHTML,/name="formula" value="2d4\+1"/);
+  assert.match(app.element('modal-content').innerHTML,/name="formula" value="1d4"/);
+});
+
+test('dice selectors contain only 1–5 dice and −1 to +5 without option groups', () => {
+  const app = openApp(null, () => 0.5);
+  const values = select => [...select.matchAll(/<option value="([^"]+)"/g)].map(match => Number(match[1]));
+  const check = (html, count, bonus) => {
+    const countSelect = html.match(count)[1];
+    const bonusSelect = html.match(bonus)[1];
+    assert.deepEqual(values(countSelect), [1, 2, 3, 4, 5]);
+    assert.deepEqual(values(bonusSelect), [-1, 0, 1, 2, 3, 4, 5]);
+    assert.doesNotMatch(bonusSelect, /optgroup/);
+  };
+  app.click('quick-roll');
+  check(app.element('modal-content').innerHTML, /<select name="count">([\s\S]*?)<\/select>/, /<select name="modifier">([\s\S]*?)<\/select>/);
+  app.click('nav', {screen: 'play'});
+  check(app.screen(), /<select data-damage-count>([\s\S]*?)<\/select>/, /<select data-damage-modifier>([\s\S]*?)<\/select>/);
+  app.submit('play-damage-form', {formula: '6d6', mode: 'normal'});
+  assert.match(app.element('play-damage-form-result').textContent, /Choose up to 5 dice/);
+});
+
+test('Play tools rolls common moves using their attributes or move-specific bonuses', () => {
+  const app = openApp(null, () => 0.5);
+  app.click('nav', {screen: 'play'});
+  const move = id => app.change('[data-bind]', {dataset: {bind: '__diceMode'}, value: id});
+  const roll = total => {
+    app.click('roll');
+    assert.match(app.screen(), new RegExp(`class="dice-result">${total}<`));
+  };
+  for (const [id, total] of [['force', 7], ['pull', 8], ['sense', 8], ['unearth', 10], ['gamble', 8]]) {
+    move(id);
+    roll(total);
+  }
+  move('lore');
+  app.change('', {id: 'lore-answers', value: '3'});
+  roll(11);
+  move('journey');
+  app.change('', {id: 'journey-pace', value: '-1'});
+  roll(7);
+});
+
+test('legacy Alwyn gear migrates once and only equipped items grant effects or presets', () => {
+  const kid = openApp().fresh('Alwyn · The Kid');
+  kid.equipment = ['potion', 'dagger'];
+  kid.used.potion = 1;
+  kid.inventory = [{...item('existing', 'Potion of healing'), details: 'From the healer'}];
+  const app = openApp({characters: [kid], activeId: kid.id}, () => 0.5);
+  app.click('nav', {screen: 'equipment'});
+  assert.doesNotMatch(app.screen(), /Equipment &amp; focus|Razor dagger/);
+  const get = name => app.state().characters[0].inventory.find(item => item.name === name);
+  const potion = get('Potion of healing');
+  const needles = get('Small acupuncture needles');
+  const skull = get('Bejeweled skull cap');
+  assert.equal(potion.details, 'From the healer');
+  assert.equal(potion.uses, 0);
+  assert.equal(potion.maxUses, 1);
+  assert.equal(needles.damage, '1d4');
+  assert.ok(needles.equipped && needles.weapon);
+  assert.equal(skull.bonuses.armor, 1);
+  app.submit('character-record-form', {name: 'Charm Bow', equipped: 'true', weapon: 'true',
+    damage: '1d8', keywords: 'precise, #far', uses: '3', maxUses: '4', 'bonus-CHA': '2', 'bonus-hp': '2'},
+  {key: 'inventory', id: 'charm-bow'});
+  app.click('inventory-use', {id: 'charm-bow'});
+  assert.equal(get('Charm Bow').uses, 2);
+  assert.deepEqual(get('Charm Bow').keywords, ['#precise', '#far']);
+  app.click('nav', {screen: 'play'});
+  assert.match(app.screen(), /Small acupuncture needles · 1d4/);
+  assert.match(app.screen(), /Charm Bow · 1d8/);
+  app.change('', {id: 'play-damage-preset', value: 'weapon:charm-bow'});
+  assert.match(app.screen(), /name="formula" value="1d8"/);
+  app.change('[data-bind]', {dataset: {bind: '__diceMode'}, value: 'pull'});
+  app.click('roll');
+  assert.match(app.screen(), /class="dice-result">10</);
+  app.click('heal-full');
+  assert.equal(app.state().characters[0].hp, 9);
+  app.submit('character-record-form', {name: 'Charm Bow', equipped: 'false', weapon: 'true',
+    damage: '1d8', 'bonus-CHA': '2'}, {key: 'inventory', id: 'charm-bow'});
+  assert.doesNotMatch(app.screen(), /Charm Bow · 1d8/);
+  app.click('roll');
+  assert.match(app.screen(), /class="dice-result">8</);
+  assert.equal(app.state().characters[0].hp, 7);
+  app.click('record-delete', {key: 'inventory', id: skull.id});
+  const restored = openApp(app.state());
+  assert.doesNotMatch(restored.screen(), /1 Armor/);
+  assert.equal(restored.state().characters[0].inventory.filter(item => item.name === potion.name).length, 1);
+  assert.ok(!restored.state().characters[0].inventory.some(item => item.name === skull.name));
 });
 
 test('all navigation pages render, Play tools comes second, and quick dice opens from any page', () => {
@@ -456,5 +540,17 @@ test('rules reference searches every class and characters can acquire and retain
   assert.deepEqual(restored.moves,['Fighter::bulwark::armiger']);
   app.click('class-path',{path:'Fighter::bulwark'});
   assert.deepEqual(app.state().characters.find(character=>character.id===profile.id).moves,[]);
+});
+
+test('starting choices create editable inventory records for multiple classes', () => {
+  const app = openApp();
+  app.submit('new-character-form', {name:'Quartermaster', className:'Fighter',
+    'starter-main':'starter:Fighter:Yew longbow', 'starter-first':'starter:Fighter:Medicine',
+    'starter-second':'starter:Fighter:Medicine'});
+  const {inventory} = app.state().characters.find(character => character.name === 'Quartermaster');
+  assert.deepEqual(inventory.map(item => item.name), ['Yew longbow', 'Medicine']);
+  assert.equal(inventory[0].damage, '1d6');
+  assert.equal(inventory[0].equipped, true);
+  assert.equal(inventory[1].uses, 2);
 });
 

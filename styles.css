@@ -10,6 +10,10 @@
 
 .record-content { flex: 1; min-width: 0; overflow-wrap: anywhere; }
 .record-details { white-space: pre-wrap; }
+.record-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 5px; }
+.inventory-tags { margin: 4px 0; gap: 4px; }
+.item-fields { margin-top: 12px; }
+#inventory-damage[hidden] { display: none; }
 
 .spell-card { position: relative; }
 .spell-cast-link {
