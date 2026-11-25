@@ -23,7 +23,7 @@ function openApp(saved = null, random = Math.random) {
     querySelector: () => null,
     querySelectorAll: () => [],
   };
-  const window = {addEventListener() {}, scrollTo() {}};
+  const window = {addEventListener() {}, scrollTo() {}, matchMedia: () => ({matches: true}), innerWidth: 390, scrollY: 0};
   const context = {
     document, window, navigator: {}, structuredClone, Math: Object.assign(Object.create(Math), {random}),
     localStorage: {getItem: key => storage.get(key), setItem: (key, value) => storage.set(key, value)},
@@ -37,6 +37,14 @@ function openApp(saved = null, random = Math.random) {
     state: () => JSON.parse(storage.get('arcanum_dw2_v3_v1')),
     screen: () => document.getElementById('screen').innerHTML,
     element: id => document.getElementById(id),
+    swipe({dx, dy, elapsed = 200, scrollDelta = 0, fromInput = false}) {
+      const start = {identifier: 1, clientX: 190, clientY: 300};
+      const target = {closest: selector => selector.startsWith('.magic-layout') || fromInput};
+      events.get('touchstart')({touches: [start], target, timeStamp: 0});
+      window.scrollY += scrollDelta;
+      const end = {...start, clientX: start.clientX + dx, clientY: start.clientY + dy};
+      events.get('touchend')({touches: [], changedTouches: [end], timeStamp: elapsed});
+    },
     click(action, extra = {}, fromLibrary = false) {
       const button = {dataset: {action, ...extra}, matches: () => false, closest: () => fromLibrary ? {} : null};
       events.get('click')({preventDefault() {}, target: {closest: () => button}});
@@ -60,11 +68,11 @@ test('mobile workspace switches preserve spell filters, damage mode, and move ro
   const selected = name => new RegExp(`data-section="${name}" aria-pressed="true"`);
   app.click('nav', {screen: 'magic'});
   assert.match(app.screen(), selected('spells'));
-  app.change('[data-spell-category]', {value: 'Attack'});
+  app.click('magic-filter', {filter: 'Attack'});
   app.click('workspace-section', {section: 'schools'});
   assert.match(app.screen(), selected('schools'));
   app.click('workspace-section', {section: 'spells'});
-  assert.match(app.screen(), /value="Attack" selected/);
+  assert.match(app.screen(), /aria-pressed="true"\s+data-action="magic-filter" data-filter="Attack"/);
   assert.doesNotMatch(app.screen(), /Cast Brief Invisibility/);
 
   app.click('nav', {screen: 'play'});
@@ -89,6 +97,56 @@ test('mobile workspace switches preserve spell filters, damage mode, and move ro
   app.click('damage-move', {move: 'melee'});
   assert.match(app.screen(), selected('damage'));
   assert.match(app.screen(), /id="weapon-damage-form"/);
+});
+
+test('mobile swipe switches adjacent sections and ignores vertical scrolling and controls', () => {
+  const app = openApp();
+  const selected = name => new RegExp(`data-section="${name}" aria-pressed="true"`);
+  app.click('nav', {screen: 'play'});
+  app.swipe({dx: -128, dy: 10});
+  assert.match(app.screen(), selected('damage'));
+  for (const gesture of [{dx: -90, dy: 140}, {dx: -45, dy: 3}, {dx: -100, dy: 9, scrollDelta: 24},
+    {dx: -100, dy: 6, elapsed: 1100}, {dx: -100, dy: 4, fromInput: true}]) app.swipe(gesture);
+  assert.match(app.screen(), selected('damage'));
+  app.swipe({dx: 115, dy: 18});
+  assert.match(app.screen(), selected('roll'));
+  app.swipe({dx: 115, dy: 18});
+  assert.match(app.screen(), selected('roll'));
+  app.click('nav', {screen: 'magic'});
+  app.swipe({dx: -105, dy: 12});
+  assert.match(app.screen(), selected('schools'));
+});
+
+test('quick status updates the active age and backstory stays with its profile', () => {
+  const seed = openApp();
+  const prodigy = seed.fresh('Alwyn');
+  const noble = seed.fresh('Alwyn (Noble)');
+  prodigy.backstory = {history: 'Prodigy history', goals: '', events: ''};
+  noble.backstory = {history: 'Noble history', goals: '', events: ''};
+  const app = openApp({characters: [prodigy, noble], activeId: prodigy.id});
+  app.submit('alwyn-form', {'sheet-noble': noble.id});
+  assert.match(app.screen(), /Character backstory/);
+  assert.match(app.screen(), /Noble history/);
+  assert.doesNotMatch(app.screen(), /story-noble-history/);
+  app.click('alwyn-edit');
+  assert.match(app.element('modal-content').innerHTML, /name="story-noble-history"[^>]*>Noble history/);
+  app.submit('alwyn-form', {'story-noble-history': 'Court mage history'});
+  assert.match(app.screen(), /Court mage history/);
+  assert.match(app.screen(), /Prodigy history/);
+  app.click('alwyn-age', {age: 'noble'});
+  app.click('nav', {screen: 'notes'});
+  assert.doesNotMatch(app.screen(), /Character backstory|Court mage history/);
+  app.click('quick-status');
+  assert.match(app.element('modal-content').innerHTML, /The Noble/);
+  app.click('hp', {delta: '-1'});
+  app.click('condition', {condition: 'Insecure', state: 'marked'});
+  assert.match(app.element('modal-content').innerHTML, /data-condition="Insecure" data-state="marked" aria-pressed="true"/);
+  const saved = app.state().characters[0];
+  assert.equal(saved.hp, prodigy.hp - 1);
+  assert.equal(saved.alwyn.forms.noble.conditions.Insecure, 'marked');
+  assert.equal(saved.conditions.Insecure, 'clear');
+  app.click('close-modal');
+  assert.equal(app.element('modal').dataset.view, '');
 });
 
 test('consolidates sheets without losing the Prodigy or either imported age sheet', () => {
@@ -170,7 +228,7 @@ test('spell cards prefill MAG and use the active character’s casting penalty',
   app.click('nav', {screen: 'magic'});
   assert.match(app.screen(), /aria-label="Cast Brief Invisibility"/);
   app.click('spell-cast', {id: spell.id});
-  assert.match(app.element('modal-content').innerHTML, /name="mag" value="0"/);
+  assert.match(app.element('modal-content').innerHTML, /<select[^>]*name="mag">[\s\S]*?<option value="0" selected/);
   assert.match(app.element('modal-content').innerHTML, /Normal cast/);
 
   app.submit('spell-cast-form', {mag: '2', extra: 'normal'}, {id: spell.id});
@@ -180,7 +238,7 @@ test('spell cards prefill MAG and use the active character’s casting penalty',
   assert.equal(app.element('cast-roll').disabled, true);
   assert.equal(app.element('cast-result').hidden, true);
   app.submit('spell-cast-form', {mag: '', extra: 'normal'}, {id: spell.id});
-  assert.match(app.element('cast-summary').innerHTML, /Enter the MAG/);
+  assert.match(app.element('cast-summary').innerHTML, /Choose the MAG/);
 
   app.click('condition', {condition: 'Angry', state: 'marked'});
   app.submit('spell-cast-form', {mag: '0', extra: 'normal'}, {id: spell.id});
@@ -257,7 +315,7 @@ test('a spell can save a damage formula and roll separately from weapon moves', 
   app.click('roll');
   assert.match(app.screen(), /3 damage/);
   app.submit('weapon-damage-form', {formula: '0d6', mode: 'normal'});
-  assert.match(app.element('weapon-damage-form-result').textContent, /Enter damage dice/);
+  assert.match(app.element('weapon-damage-form-result').textContent, /Choose the damage dice/);
   assert.equal(app.state().characters[0].hp, kid.hp);
 });
 

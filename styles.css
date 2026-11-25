@@ -30,13 +30,9 @@
 #cast-summary p { margin: 6px 0 0; }
 #spell-cast-form .modal-actions { margin-top: 0; }
 
-.quick-dice { margin-top: 18px; }
 .quick-dice-form {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr)) auto;
   gap: 10px;
-  align-items: end;
-  max-width: 540px;
 }
 .quick-dice-result {
   display: flex;
@@ -45,13 +41,7 @@
   gap: 10px;
   overflow-wrap: anywhere;
 }
-.quick-dice-result:not(:empty) { margin-top: 9px; }
 .quick-dice-result strong { color: var(--accent); font-size: 20px; }
-
-@media (max-width: 440px) {
-  .quick-dice-form { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-  .quick-dice-form button { grid-column: 1 / -1; }
-}
 
 .spellbook-header {
   display: flex;
@@ -74,11 +64,9 @@
 
 .damage-roller {
   display: grid;
-  grid-template-columns: minmax(90px, 1fr) minmax(130px, 1.2fr) auto;
-  align-items: end;
-  gap: 9px;
+  gap: 10px;
 }
-.damage-result { grid-column: 1 / -1; }
+.quick-dice-result:empty { display: none; }
 
 /* Focused workspaces: short navigation, contained spell lists, reusable dice controls. */
 .sidebar { overflow-y: auto; }
@@ -101,13 +89,9 @@
 .dice-builder { border: 0; padding: 0; margin: 0; min-width: 0; }
 .dice-builder legend { font-size: 14px; margin-bottom: 8px; color: var(--muted); }
 .dice-builder > .spell-availability { margin-bottom: 10px; }
-.dice-controls { display: grid; grid-template-columns: .9fr 1.1fr 1fr; gap: 8px; }
+.dice-controls { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
 .dice-builder output { display: block; margin-top: 7px; }
-.damage-roller { grid-template-columns: minmax(0,1.6fr) minmax(0,1fr); }
-.damage-roller > button { grid-column: 1/-1; }
-.damage-roller > .dice-builder { grid-column: 1/-1; }
 .condition-list { margin-top: 14px; }
-.quick-dice { margin-top: 0; }
 .top-actions .primary { color: var(--accent); background: var(--accent-glow); }
 .sidebar-group-label { font-size: 11px; }
 .field-label, .small, .btn, .pagehead p { font-size: 14px; }
@@ -132,7 +116,34 @@
 @media print {
   .spellbook-scroll { max-height: none; overflow: visible; }
 }
-.damage-result:not(:empty) { margin-top: 0; }
+.age-backstories { display: grid; gap: 8px; }
+.age-backstories summary { min-height: 26px; }
+.backstory-fields { margin-top: 12px; }
+.quick-status { gap: 12px; }
+.quick-status .card { padding: 0; border: 0; box-shadow: none; }
+.quick-status .card-title { margin-bottom: 8px; }
+.quick-status .condition-list { margin-top: 0; gap: 6px; }
+.quick-status .condition { padding: 5px 9px; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 5px 8px; }
+.quick-status .condition-actions { margin-top: 0; }
+.quick-status .choice-btn { min-height: 40px; }
+.quick-status .choice-btn.selected[data-state="locked"] { border-color: var(--danger); color: var(--danger); }
+
+.play-roll-card .card-title { margin-bottom: 12px; }
+.play-roll-fields { display: grid; gap: 10px; }
+.play-roll-fields .field-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.play-roll-fields .field-grid > label:only-child { grid-column: 1 / -1; }
+.play-roll-result {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  margin: 10px 0;
+  padding: 8px;
+}
+.play-roll-result .dice-result { font-size: 32px; margin: 0; }
+.play-roll-result .roll-die { width: 31px; height: 31px; font-size: 15px; }
+.play-roll-penalty { margin: 8px 0 0; }
+.play-roll-actions { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: 8px; }
 
 .mobile-workspace { display: none; }
 .workspace-panel { align-content: start; min-width: 0; }
@@ -140,12 +151,12 @@
 .play-layout { align-items: start; }
 .play-layout .workspace-panel:has(> .mobile-workspace:only-child) { display: none; }
 
-@media (max-width: 540px) {
-  .damage-roller { grid-template-columns: minmax(0, 1fr) minmax(0, 1.25fr); }
-  .damage-roller button { grid-column: 1 / -1; }
-}
-
 @media screen and (max-width: 720px) {
+  .topbar { padding-inline: 12px; gap: 8px; }
+  .topbar-left { gap: 8px; }
+  .top-title { min-width: 0; }
+  .top-title strong { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .top-actions { gap: 4px; }
   .mobile-workspace { display: block; }
   .btn.mobile-workspace { display: inline-flex; }
   .workspace-desktop, .workspace-intro { display: none; }
@@ -180,6 +191,7 @@
     color: var(--accent);
   }
   .workspace-nav button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .workspace-nav, .magic-layout, .play-layout { touch-action: pan-y pinch-zoom; }
   .magic-layout, .play-layout, .workspace-panel { gap: 12px; }
   .play-column { display: contents; }
   .play-layout .workspace-panel:has(> .mobile-workspace:only-child) { display: grid; }
@@ -193,12 +205,19 @@
   }
   .spellbook-panel .spellbook-header { margin-bottom: 12px; }
   .spellbook-panel .spell-filters {
-    grid-template-columns: minmax(0, 1fr) auto;
-    gap: 8px 12px;
-    margin-bottom: 12px;
+    gap: 7px;
+    margin-bottom: 10px;
   }
-  .spellbook-panel [data-spell-search] { grid-column: 1 / -1; }
-  .spellbook-panel .spell-category-tabs { display: none; }
+  .spell-category-tabs {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 5px;
+  }
+  .spell-category-tabs .tab {
+    min-height: 40px;
+    padding: 4px 2px;
+    font-size: 12px;
+  }
   .spellbook-panel .spell-availability { min-height: 44px; font-size: 13px; }
   .spellbook-panel .spell-grid { grid-template-columns: minmax(0, 1fr); gap: 8px; }
   .spellbook-panel .spell-card { padding: 10px 12px; gap: 6px; }
@@ -211,14 +230,14 @@
   }
   .spellbook-panel .spell-formula, .spellbook-panel .spell-card > .micro { display: none; }
   .spellbook-panel .spell-card .icon-btn { width: 44px; height: 44px; }
-  #spell-library .spell-category-select { display: none; }
-  .play-roll-result { padding: 12px; }
-  .play-roll-result .dice-result { font-size: 40px; }
+  .play-roll-card { padding: 12px; }
+  .play-roll-card .field-label { margin-bottom: 3px; }
+  .play-roll-actions .btn { min-height: 44px; padding-inline: 6px; }
+  .play-roll-fields select, #modal select { font-size: 16px; }
   .play-layout .field-grid, #spell-cast-form .field-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .play-layout .condition { padding: 8px 10px; }
   .play-layout .condition-sub { margin-block: 4px 6px; font-size: 12px; }
   .play-layout .choice-btn { min-height: 38px; }
-  .play-layout .damage-roller > label { grid-column: 1 / -1; }
   .magic-layout input:not([type="checkbox"]), .magic-layout select,
   .play-layout input:not([type="checkbox"]), .play-layout select,
   #spell-cast-form input, #spell-cast-form select, #spell-damage-form input,
@@ -226,5 +245,15 @@
 }
 
 @media screen and (max-width: 360px) {
-  .spellbook-panel .spell-filters { grid-template-columns: minmax(0, 1fr); }
+  .mobile-mark { display: none; }
+  .play-roll-fields select, .dice-controls select { background-position: right 7px center; padding-right: 27px; }
+}
+
+@media screen and (max-width: 720px) and (max-height: 650px) {
+  .main-content:has(.play-layout) { padding-top: 12px; }
+  .age-nav:has(~ .play-layout) { margin-bottom: 8px; }
+  .age-nav:has(~ .play-layout) .age-tab { min-height: 44px; padding-block: 4px; }
+  .play-roll-card .card-title { display: none; }
+  .play-roll-fields { gap: 7px; }
+  .play-roll-result { margin-block: 7px; }
 }
