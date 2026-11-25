@@ -134,8 +134,97 @@
 }
 .damage-result:not(:empty) { margin-top: 0; }
 
+.mobile-workspace { display: none; }
+.workspace-panel { align-content: start; min-width: 0; }
+.workspace-panel > .card + .card { margin-top: 0; }
+.play-layout { align-items: start; }
+.play-layout .workspace-panel:has(> .mobile-workspace:only-child) { display: none; }
+
 @media (max-width: 540px) {
   .damage-roller { grid-template-columns: minmax(0, 1fr) minmax(0, 1.25fr); }
   .damage-roller button { grid-column: 1 / -1; }
 }
 
+@media screen and (max-width: 720px) {
+  .mobile-workspace { display: block; }
+  .btn.mobile-workspace { display: inline-flex; }
+  .workspace-desktop, .workspace-intro { display: none; }
+  .workspace-start { scroll-margin-top: 63px; }
+  .workspace-nav {
+    display: flex;
+    position: sticky;
+    top: 63px;
+    z-index: 10;
+    gap: 4px;
+    margin-bottom: 12px;
+    padding: 5px;
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    background: var(--surface);
+  }
+  .workspace-nav button {
+    flex: 1 1 0;
+    min-width: 0;
+    min-height: 44px;
+    padding: 6px 4px;
+    border: 1px solid transparent;
+    border-radius: 8px;
+    background: transparent;
+    color: var(--muted);
+    font-size: 14px;
+    font-weight: 650;
+  }
+  .workspace-nav button[aria-pressed="true"] {
+    background: var(--accent-glow);
+    border-color: var(--accent);
+    color: var(--accent);
+  }
+  .workspace-nav button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .magic-layout, .play-layout, .workspace-panel { gap: 12px; }
+  .play-column { display: contents; }
+  .play-layout .workspace-panel:has(> .mobile-workspace:only-child) { display: grid; }
+  .magic-layout .workspace-inactive,
+  .play-layout .workspace-inactive,
+  .play-layout .workspace-inactive:has(> .mobile-workspace:only-child) { display: none; }
+  .spellbook-panel .spellbook-scroll {
+    max-height: none;
+    overflow: visible;
+    padding-right: 0;
+  }
+  .spellbook-panel .spellbook-header { margin-bottom: 12px; }
+  .spellbook-panel .spell-filters {
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 8px 12px;
+    margin-bottom: 12px;
+  }
+  .spellbook-panel [data-spell-search] { grid-column: 1 / -1; }
+  .spellbook-panel .spell-category-tabs { display: none; }
+  .spellbook-panel .spell-availability { min-height: 44px; font-size: 13px; }
+  .spellbook-panel .spell-grid { grid-template-columns: minmax(0, 1fr); gap: 8px; }
+  .spellbook-panel .spell-card { padding: 10px 12px; gap: 6px; }
+  .spellbook-panel .spell-card h3 { font-size: 16px; }
+  .spellbook-panel .spell-card p {
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+  .spellbook-panel .spell-formula, .spellbook-panel .spell-card > .micro { display: none; }
+  .spellbook-panel .spell-card .icon-btn { width: 44px; height: 44px; }
+  #spell-library .spell-category-select { display: none; }
+  .play-roll-result { padding: 12px; }
+  .play-roll-result .dice-result { font-size: 40px; }
+  .play-layout .field-grid, #spell-cast-form .field-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .play-layout .condition { padding: 8px 10px; }
+  .play-layout .condition-sub { margin-block: 4px 6px; font-size: 12px; }
+  .play-layout .choice-btn { min-height: 38px; }
+  .play-layout .damage-roller > label { grid-column: 1 / -1; }
+  .magic-layout input:not([type="checkbox"]), .magic-layout select,
+  .play-layout input:not([type="checkbox"]), .play-layout select,
+  #spell-cast-form input, #spell-cast-form select, #spell-damage-form input,
+  #spell-damage-form select { font-size: 16px; }
+}
+
+@media screen and (max-width: 360px) {
+  .spellbook-panel .spell-filters { grid-template-columns: minmax(0, 1fr); }
+}

@@ -1,5 +1,5 @@
-const CACHE = 'arcanum-dw2-navigation-3';
-const RELEASE = '20261123-3';
+const CACHE = 'arcanum-dw2-mobile-workspaces-1';
+const RELEASE = '20261125-1';
 const ASSETS = ['./', './index.html', './privacy.html', './icon.svg', './manifest.webmanifest',
   ...['styles.css', 'alwyn.css', 'app.js', 'rules-data.js', 'drive-config.js', 'drive-sync.js'].map(path => './' + path + '?v=' + RELEASE)];
 

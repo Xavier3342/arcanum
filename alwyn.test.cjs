@@ -38,7 +38,7 @@ function openApp(saved = null, random = Math.random) {
     screen: () => document.getElementById('screen').innerHTML,
     element: id => document.getElementById(id),
     click(action, extra = {}, fromLibrary = false) {
-      const button = {dataset: {action, ...extra}, closest: () => fromLibrary ? {} : null};
+      const button = {dataset: {action, ...extra}, matches: () => false, closest: () => fromLibrary ? {} : null};
       events.get('click')({preventDefault() {}, target: {closest: () => button}});
     },
     change(selector, values) {
@@ -54,6 +54,42 @@ function openApp(saved = null, random = Math.random) {
 }
 
 const item = (id, name) => ({id, name, quantity: 1, details: '', location: ''});
+
+test('mobile workspace switches preserve spell filters, damage mode, and move rolls', () => {
+  const app = openApp(null, () => 0.5);
+  const selected = name => new RegExp(`data-section="${name}" aria-pressed="true"`);
+  app.click('nav', {screen: 'magic'});
+  assert.match(app.screen(), selected('spells'));
+  app.change('[data-spell-category]', {value: 'Attack'});
+  app.click('workspace-section', {section: 'schools'});
+  assert.match(app.screen(), selected('schools'));
+  app.click('workspace-section', {section: 'spells'});
+  assert.match(app.screen(), /value="Attack" selected/);
+  assert.doesNotMatch(app.screen(), /Cast Brief Invisibility/);
+
+  app.click('nav', {screen: 'play'});
+  assert.match(app.screen(), selected('roll'));
+  app.click('roll');
+  app.click('workspace-section', {section: 'damage'});
+  assert.match(app.screen(), selected('damage'));
+  assert.match(app.screen(), /id="play-spell-damage-form"/);
+  app.change('', {form: {id: 'play-spell-damage-form'}, name: 'mode', value: 'maximum'});
+  app.click('workspace-section', {section: 'status'});
+  app.click('hp', {delta: '-1'});
+  assert.match(app.screen(), selected('status'));
+  assert.equal(app.state().characters[0].hp, 6);
+  app.click('workspace-section', {section: 'damage'});
+  assert.match(app.screen(), /value="maximum" selected/);
+  app.click('workspace-section', {section: 'roll'});
+  assert.match(app.screen(), /class="dice-result">10/);
+
+  app.change('[data-bind]', {dataset: {bind: '__diceMode'}, value: 'dodge'});
+  app.click('workspace-section', {section: 'damage'});
+  assert.match(app.screen(), /data-action="damage-move" data-move="melee"/);
+  app.click('damage-move', {move: 'melee'});
+  assert.match(app.screen(), selected('damage'));
+  assert.match(app.screen(), /id="weapon-damage-form"/);
+});
 
 test('consolidates sheets without losing the Prodigy or either imported age sheet', () => {
   const seed = openApp();
