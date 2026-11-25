@@ -493,6 +493,22 @@ test('legacy Alwyn gear migrates once and only equipped items grant effects or p
   assert.ok(!restored.state().characters[0].inventory.some(item => item.name === skull.name));
 });
 
+test('Alwyn receives the replacement needles once even if a device had no legacy dagger selected', () => {
+  const root = openApp().fresh('Alwyn');
+  root.inventoryVersion = 1;
+  root.inventory = [item('gear', 'Adventuring gear')];
+  root.alwyn = {name:'Alwyn', schemaVersion:2, personality:{}, forms:{}};
+  const app = openApp({characters: [root], activeId: root.id});
+  const getNeedles = profile => profile.characters[0].inventory.filter(item => item.name === 'Small acupuncture needles');
+  const needles = getNeedles(app.state());
+  assert.equal(needles.length, 1);
+  assert.ok(needles[0].equipped && needles[0].weapon);
+  assert.ok(app.state().characters[0].inventory.some(item => item.name === 'Adventuring gear'));
+  assert.equal(getNeedles(openApp(app.state()).state()).length, 1);
+  app.click('record-delete', {key:'inventory', id:needles[0].id});
+  assert.equal(getNeedles(openApp(app.state()).state()).length, 0);
+});
+
 test('all navigation pages render, Play tools comes second, and quick dice opens from any page', () => {
   const app=openApp();
   const desktop=app.element('nav-desktop').innerHTML;

@@ -547,24 +547,36 @@ function startingGearRecord(item, used = 0) {
   return {...item, uses, id: 'starter-' + item.id};
 }
 
+function isNeedleItem(record) {
+  return /\bacu(?:pu|po)ncture needles\b/i.test(record?.name);
+}
+
 function migrateInventory(character) {
   const records = Array.isArray(character.inventory) ? [...character.inventory] : [];
-  if (character.inventoryVersion !== 1) {
+  const version = Number(character.inventoryVersion) || 0;
+  const dagger = EQUIPMENT.find(item => item.id === 'dagger');
+  const needles = {...dagger, name: 'Small acupuncture needles', keywords: []};
+  if (version < 1) {
     const selected = [FOCI.find(item => item.id === character.focus),
       ...EQUIPMENT.filter(item => character.equipment?.includes?.(item.id))].filter(Boolean);
     const alwyn = character.alwyn || /\balwyn\b/i.test(character.name);
     for (const item of selected) {
       // Alwyn's needles replace the legacy dagger slot and inherit its damage dice.
-      const template = alwyn && item.id === 'dagger'
-        ? {...item, name: 'Small acupuncture needles', keywords: []} : item;
+      const template = alwyn && item.id === 'dagger' ? needles : item;
       const starter = startingGearRecord(template, character.used?.[item.id]);
       const index = records.findIndex(record => String(record?.name ?? '').trim().toLowerCase() === starter.name.toLowerCase()
-        || (alwyn && item.id === 'dagger' && /\bacu(?:pu|po)ncture needles\b/i.test(record?.name)));
+        || (alwyn && item.id === 'dagger' && isNeedleItem(record)));
       if (index < 0) records.push(starter);
       else records[index] = {...starter, ...records[index]};
     }
-    character.inventoryVersion = 1;
   }
+  if (version < 2 && character.alwyn && !records.some(isNeedleItem)) {
+    const index = records.findIndex(record => record?.id === 'starter-dagger');
+    if (index < 0) records.push(startingGearRecord(needles));
+    else if (records[index].name === dagger.name) records[index] = {...records[index], name: needles.name, keywords: needles.keywords};
+    else records.push(startingGearRecord({...needles, id: 'alwyn-needles'}));
+  }
+  if (version < 2) character.inventoryVersion = 2;
   character.inventory = records.map((record, index) => cleanRecord('inventory', record,
     typeof record?.id === 'string' && record.id ? record.id : 'inventory-' + index)).filter(Boolean);
 }
@@ -1044,7 +1056,7 @@ function createCharacter(data) {
     ...main.filter(item => item.id === character.focus),
     ...extras.filter(item => character.equipment.includes(item.id)),
   ].map(item => startingGearRecord(item));
-  character.inventoryVersion = 1;
+  character.inventoryVersion = 2;
   if (className !== 'Wizard') character.spells = [];
   return migrateCharacter(character);
 }
