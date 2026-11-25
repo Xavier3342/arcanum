@@ -422,11 +422,11 @@ test('dice selectors contain only 1–5 dice and −1 to +5 without option group
   app.click('quick-roll');
   check(app.element('modal-content').innerHTML, /<select name="count">([\s\S]*?)<\/select>/, /<select name="modifier">([\s\S]*?)<\/select>/);
   const freeSides = app.element('modal-content').innerHTML.match(/<select name="sides">([\s\S]*?)<\/select>/)[1];
-  assert.deepEqual(values(freeSides), [3, 6, 8, 20]);
+  assert.deepEqual(values(freeSides), [3, 6, 8, 10, 12, 20]);
   app.click('nav', {screen: 'play'});
   check(app.screen(), /<select data-damage-count>([\s\S]*?)<\/select>/, /<select data-damage-modifier>([\s\S]*?)<\/select>/);
   const damageSides = app.screen().match(/<select data-damage-sides>([\s\S]*?)<\/select>/)[1];
-  assert.deepEqual(values(damageSides), [3, 6, 8, 20]);
+  assert.deepEqual(values(damageSides), [3, 6, 8, 10, 12, 20]);
   app.submit('play-damage-form', {formula: '6d6', mode: 'normal'});
   assert.match(app.element('play-damage-form-result').textContent, /Choose up to 5 dice/);
 });
