@@ -115,7 +115,7 @@ let hideUnavailable = false;
 let playDamage = {}, playDamagePreset = '', rulesCategory = 'All', rulesSearch = '', pathClassFilter = 'All';
 let loreAnswers = '0', journeyPace = '1';
 const spellCategories = ['Defense', 'Mobility', 'Control', 'Attack', 'Utility', 'Other'];
-const diceSides = [2, 3, 4, 6, 8, 10, 12, 20, 100];
+const diceSides = [3, 6, 8, 20];
 const currentCharacter=()=>db.characters.find(c=>c.id===db.activeId)||db.characters[0];
 const ages = [
   {id: 'prodigy', name: 'The Prodigy', years: '14–15', style: 'Wind Dancer', stat: 'DEX', schools: ['Illusion', 'Evocation', 'Divination']},
@@ -834,12 +834,13 @@ function dicePoolControls({count, sides, modifier}, damage = false) {
   const controls = damage
     ? ['data-damage-count', 'data-damage-sides', 'data-damage-modifier']
     : ['name="count"', 'name="sides"', 'name="modifier"'];
-  const dieOption = value => diceOption(value, sides, `d${value}`);
-  const otherSides = Array.from({length: 99}, (_, i) => i + 2).filter(value => !diceSides.includes(value));
+  // Display a saved die without offering it as a choice for new rolls.
+  const savedSide = damage && !diceSides.includes(sides)
+    ? `<option value="${sides}" selected disabled hidden>d${sides} (preset)</option>` : '';
   return `<div class="dice-controls">
     <label><span class="field-label">Dice</span><select ${controls[0]}>${diceRange(1, diceCountMax, count)}</select></label>
     <label><span class="field-label">Sides</span><select ${controls[1]}>
-      ${diceSides.map(dieOption).join('')}<optgroup label="Other dice">${otherSides.map(dieOption).join('')}</optgroup>
+      ${savedSide}${diceSides.map(value => diceOption(value, sides, `d${value}`)).join('')}
     </select></label>
     <label><span class="field-label">Bonus</span><select ${controls[2]}>${diceRange(diceBonusMin, diceBonusMax, modifier, fmtSign)}</select></label>
   </div>`;
@@ -1360,7 +1361,7 @@ function rollQuickDice(form) {
   const count = Number(data.get('count'));
   const sides = Number(data.get('sides'));
   const modifier = Number(data.get('modifier'));
-  if (!Number.isInteger(count) || count < 1 || count > diceCountMax || !Number.isInteger(sides) || sides < 2 || sides > 100
+  if (!Number.isInteger(count) || count < 1 || count > diceCountMax || !diceSides.includes(sides)
       || !Number.isInteger(modifier) || modifier < diceBonusMin || modifier > diceBonusMax) return;
   const dice = rollDice(count, sides);
   const total = dice.reduce((sum, die) => sum + die, modifier);
