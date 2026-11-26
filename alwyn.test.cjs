@@ -556,6 +556,7 @@ test('rules reference searches every class and characters can acquire and retain
   const app=openApp();
   app.click('nav',{screen:'rules'});
   app.click('rules-category', {category: 'All'});
+  assert.match(app.screen(),/data-rules-search[\s\S]*aria-label="Reference categories"/);
   assert.match(app.screen(),/Barbarian/);
   assert.match(app.screen(),/Wizard/);
   app.input('[data-rules-search]',{value:'Mirror Image'});

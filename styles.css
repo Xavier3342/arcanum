@@ -135,9 +135,7 @@
 .reference-entry summary { cursor: pointer; }
 .reference-entry summary span { display: block; margin-top: 5px; }
 .reference-entry p { margin: 12px 0 0; }
-.rules-controls { display: grid; gap: 12px; grid-template-columns: minmax(0, 2fr) minmax(10rem, 1fr); margin-top: 18px; }
-.rules-search { display: block; }
-.rules-search:only-child { grid-column: 1 / -1; }
+.rules-controls { display: grid; gap: 12px; grid-template-columns: minmax(0, 1fr); }
 .rules-tabs .tab { min-height: 44px; }
 .reference-open { display: flex; justify-content: space-between; align-items: center; gap: 12px; width: 100%; min-height: 44px; text-align: left; color: var(--text); }
 .reference-open:hover { border-color: var(--accent); }
@@ -175,7 +173,6 @@
 .journal-nav button[aria-pressed="true"] { background: var(--accent-glow); color: var(--accent); border-color: var(--accent); }
 #mobile-age-picker { display: none; }
 @media (max-width: 720px) {
-  .rules-controls { grid-template-columns: 1fr; }
   .rules-controls input, .rules-controls select { font-size: 16px; }
   .reference-open { padding: 10px 12px; }
   .reference-body { font-size: 0.9375rem; }

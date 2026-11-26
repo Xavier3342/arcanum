@@ -958,11 +958,11 @@ function renderRules() {
   const familyLabel = rulesCategory === 'Equipment' ? 'Equipment type' : 'Path class';
   return pagehead('Rules & reference', 'Dungeon World 2 Beta v3 by Helena Real and Spencer Moore.') +
     `<section class="card rules-page">
-      <nav class="tabset rules-tabs" aria-label="Reference categories">${referenceTabs.map(category =>
-        `<button class="tab ${rulesCategory === category ? 'active' : ''}" aria-pressed="${rulesCategory === category}"
-          data-action="rules-category" data-category="${category}">${category}</button>`).join('')}</nav>
       <div class="rules-controls">
-        <label class="rules-search"><span class="field-label">Search reference</span><input class="input" type="search" data-rules-search value="${esc(rulesSearch)}" placeholder="Move, Path, item, keyword, or Struggle"></label>
+        <label><span class="field-label">Search reference</span><input class="input" type="search" data-rules-search value="${esc(rulesSearch)}" placeholder="Move, Path, item, keyword, or Struggle"></label>
+        <nav class="tabset rules-tabs" aria-label="Reference categories">${referenceTabs.map(category =>
+          `<button class="tab ${rulesCategory === category ? 'active' : ''}" aria-pressed="${rulesCategory === category}"
+            data-action="rules-category" data-category="${category}">${category}</button>`).join('')}</nav>
         ${families.length ? `<label><span class="field-label">${familyLabel}</span><select id="rules-family">${opts(['All', ...families], rulesFamily)}</select></label>` : ''}
       </div>
       <div id="rules-results">${rulesResults()}</div>
