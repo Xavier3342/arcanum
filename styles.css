@@ -257,26 +257,44 @@
 .age-backstories { display: grid; gap: 8px; }
 .age-backstories summary { min-height: 26px; }
 .backstory-fields { margin-top: 12px; }
-.modal[data-view="quick-status"] { width: min(100%, 430px); padding-block: 14px; }
-.modal[data-view="quick-status"] .modal-head { margin-bottom: 6px; }
-.quick-status { gap: 9px; }
+.modal[data-view="quick-status"] { width: min(100%, 430px); padding-block: 18px; }
+.modal[data-view="quick-status"] .modal-head { margin-bottom: 8px; }
+.quick-status { gap: 12px; }
 .quick-status .card { padding: 0; border: 0; box-shadow: none; }
-.quick-status .card-title { margin-bottom: 5px; }
+.quick-status .card-title { margin-bottom: 8px; }
 .quick-status .card-title h2 { font: 650 14px/1.25 var(--font); }
-.quick-status .meter-row { padding-bottom: 7px; border-bottom: 1px solid var(--line); }
+.quick-status .meter-row { padding-bottom: 12px; border-bottom: 1px solid var(--line); }
 .quick-status .meter-value { font-size: 29px; }
 .quick-status .meter-value span { font-size: 17px; }
-.quick-status .hp-ctrl { gap: 4px; }
-.quick-status .hp-ctrl .btn { min-height: 42px; padding-inline: 8px; }
-.quick-status .condition-list { margin-top: 0; gap: 4px; }
-.quick-status .condition { padding: 1px 6px; min-height: 42px; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 3px 5px; }
-.quick-status .condition-top { gap: 4px; font-size: 13px; }
+.quick-status .hp-ctrl { gap: 6px; }
+.quick-status .hp-ctrl .btn { min-height: 44px; padding: 6px 10px; }
+.quick-status .hp-ctrl .step-btn { width: 44px; height: 44px; }
+.quick-status .condition-list { margin-top: 0; gap: 6px; }
+.quick-status .condition {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 4px 8px;
+  min-height: 50px;
+  padding: 2px 8px;
+}
+.quick-status .condition-top { gap: 6px; font-size: 13px; }
 .quick-status .condition-top .pill { padding: 2px 5px; }
-.quick-status .condition-actions { margin-top: 0; flex-wrap: nowrap; gap: 3px; }
-.quick-status .choice-btn { min-width: 42px; min-height: 40px; padding-inline: 4px; }
+.quick-status .condition-actions {
+  margin: 0 0 0 auto;
+  flex-wrap: nowrap;
+  gap: 2px;
+  padding: 2px;
+  border-radius: 9px;
+  background: var(--surface);
+}
+.quick-status .choice-btn { min-width: 40px; min-height: 40px; padding-inline: 4px; }
+.quick-status .choice-btn:not(.selected) { border-color: transparent; }
+.quick-status .choice-btn:not(.selected):hover { color: var(--text); }
 .quick-status .choice-btn.selected[data-state="locked"] { border-color: var(--danger); color: var(--danger); }
-.quick-status-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 5px; }
-.quick-status-actions .btn { min-height: 42px; padding: 5px; gap: 4px; font-size: 12px; white-space: normal; }
+.quick-status-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.quick-status-actions .btn { min-height: 44px; padding: 6px 8px; gap: 6px; font-size: 12px; white-space: normal; }
 .quick-status-actions .btn.danger { grid-column: 1 / -1; }
 
 .play-roll-card { display: grid; gap: 10px; }
@@ -427,6 +445,18 @@
 @media screen and (max-width: 360px) {
   .mobile-mark { display: none; }
   .play-roll-fields select, .dice-controls select { background-position: right 7px center; padding-right: 27px; }
+  .quick-status .condition { padding-inline: 6px; column-gap: 6px; }
+  .quick-status .choice-btn { min-width: 38px; }
+  .quick-status-actions .btn { padding-inline: 4px; }
+}
+
+@media screen and (max-height: 600px) {
+  .modal[data-view="quick-status"] { padding-block: 14px; }
+  .quick-status { gap: 8px; }
+  .quick-status .meter-row { padding-bottom: 8px; }
+  .quick-status .condition-list { gap: 4px; }
+  .quick-status .condition { min-height: 48px; }
+  .quick-status .condition-actions { padding-block: 1px; }
 }
 
 @media screen and (max-width: 720px) and (max-height: 650px) {
