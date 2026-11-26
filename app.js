@@ -489,6 +489,11 @@ function inventoryRow(item) {
   return `<div class="group-item inventory-row">
     <button type="button" class="inventory-open" data-action="inventory-open" data-id="${esc(item.id)}" aria-label="View ${esc(item.name)}" aria-haspopup="dialog">
       <strong>${esc(item.name)}</strong>${preview ? `<span class="small muted">${esc(preview)}</span>` : ''}
+      <span class="inventory-meta">
+        <span>Qty ${item.quantity}</span>
+        ${item.maxUses ? `<span id="inventory-row-uses-${esc(item.id)}">${item.uses}/${item.maxUses} uses</span>` : ''}
+        ${item.keywords.map(tag => `<span class="inventory-keyword">${esc(tag)}</span>`).join('')}
+      </span>
     </button>
     <button type="button" class="inventory-edit" data-action="record-edit" data-key="inventory" data-id="${esc(item.id)}"
       aria-label="Edit ${esc(item.name)}" title="Edit ${esc(item.name)}">${ico('edit')}</button>
@@ -1692,9 +1697,12 @@ case 'inventory-refill': {
   if (!item?.maxUses || (refill ? item.uses >= item.maxUses : item.uses <= 0)) break;
   item.uses = refill ? item.maxUses : item.uses - 1;
   save();
+  const uses = `${item.uses}/${item.maxUses} uses`;
+  const rowCount = document.getElementById('inventory-row-uses-' + item.id);
+  if (rowCount) rowCount.textContent = uses;
   const count = document.querySelector('#inventory-item-uses');
   if (count) {
-    count.textContent = `${item.uses}/${item.maxUses} uses`;
+    count.textContent = uses;
     const useButton = document.querySelector('#modal [data-action="inventory-use"]');
     const refillButton = document.querySelector('#modal [data-action="inventory-refill"]');
     useButton.disabled = item.uses === 0;

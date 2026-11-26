@@ -32,6 +32,16 @@
   -webkit-line-clamp: 2;
   overflow: hidden;
 }
+.inventory-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 9px;
+  margin-top: 2px;
+  color: var(--muted);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+.inventory-keyword { color: var(--accent); }
 .inventory-edit {
   flex: 0 0 44px;
   display: grid;
