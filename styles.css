@@ -82,6 +82,7 @@
 #cast-summary p { margin: 6px 0 0; }
 #spell-cast-form .modal-actions { margin-top: 0; }
 
+.modal[data-view="quick-roll"] { width: min(100%, 430px); }
 .quick-dice-form {
   display: grid;
   gap: 10px;
@@ -283,13 +284,13 @@
 .play-roll-fields { display: grid; gap: 10px; }
 .play-roll-fields .field-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
 .play-roll-fields .field-grid > label:only-child { grid-column: 1 / -1; }
-.play-roll-result {
+.dice-result-panel {
   display: grid;
   gap: 6px;
   padding: 10px 12px;
 }
-.play-roll-result .dice-result { font-size: clamp(52px, 13vw, 64px); margin: 0; color: var(--accent); }
-.play-roll-result .roll-die { width: 31px; height: 31px; font-size: 15px; }
+.dice-result-panel .dice-result { font-size: clamp(52px, 13vw, 64px); margin: 0; color: var(--accent); }
+.dice-result-panel .roll-die { width: 31px; height: 31px; font-size: 15px; }
 .play-roll-penalty { margin: 0; }
 #play-damage-form [data-damage-preview] { display: none; }
 

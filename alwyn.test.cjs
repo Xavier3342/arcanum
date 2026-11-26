@@ -82,8 +82,8 @@ test('mobile workspace switches preserve spell filters, damage mode, and move ro
   const tabs = app.screen().match(/<nav class="workspace-nav play-nav"[\s\S]*?<\/nav>/)[0];
   assert.deepEqual([...tabs.matchAll(/data-section="([^"]+)"/g)].map(tab => tab[1]), ['roll', 'damage']);
   assert.ok(app.screen().indexOf('id="play-damage-form"') < app.screen().indexOf(tabs));
-  assert.match(app.screen(), /id="play-roll-result" class="dice-area play-roll-result"[\s\S]*data-bind="__diceMode"/);
-  assert.match(app.screen(), /id="play-damage-form-result" class="dice-area play-roll-result"[\s\S]*id="play-damage-preset"/);
+  assert.match(app.screen(), /id="play-roll-result" class="dice-area dice-result-panel"[\s\S]*data-bind="__diceMode"/);
+  assert.match(app.screen(), /id="play-damage-form-result" class="dice-area dice-result-panel"[\s\S]*id="play-damage-preset"/);
   assert.doesNotMatch(app.screen(), /Quick combat tracker|Move reference|Spellcasting checklist/);
   app.click('roll');
   app.click('workspace-section', {section: 'damage'});
@@ -277,8 +277,15 @@ test('quick dice rolls independently of the saved morning d3', () => {
   app.click('alwyn-age', {age: 'sage'});
   assert.match(app.screen(), /The Sage · Roleplay/);
   app.click('nav', {screen: 'magic'});
+  app.click('quick-roll');
+  assert.match(app.element('modal-content').innerHTML, /id="quick-dice-result" class="dice-area dice-result-panel"[\s\S]*name="count"/);
   app.submit('quick-dice-form', {count: '2', sides: '4', modifier: '-1'});
-  assert.match(app.element('quick-dice-result').innerHTML, /<strong>7<\/strong>.*2d4/s);
+  const result = app.element('quick-dice-result');
+  assert.match(result.innerHTML, /<strong class="dice-result">7<\/strong>.*2d4-1/s);
+  assert.equal((result.innerHTML.match(/class="roll-die"/g) || []).length, 2);
+  app.change('', {form: {id: 'quick-dice-form', fields: {count: '2', sides: '10', modifier: '-1'}}});
+  assert.match(result.innerHTML, /2d10-1/);
+  assert.doesNotMatch(result.innerHTML, /class="roll-die"/);
   assert.deepEqual(app.state(), {...state, age: 'sage'});
 });
 

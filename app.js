@@ -725,7 +725,7 @@ function playRollCard() {
   const formula = `2d6 + ${stat} (${fmtSign(modifier)})`;
   return `<section class="card play-roll-card">
     <div class="card-title"><h2>Dice roller</h2></div>
-    ${playResultPanel('play-roll-result', playResultContent(diceLast, formula))}
+    ${diceResultPanel('play-roll-result', diceResultContent(diceLast, formula))}
     <div class="play-roll-fields">
       ${rollSelect('Roll type', 'data-bind="__diceMode"', playRollTypes.map(({id, name}) => diceOption(id, diceMode, name)).join(''))}
       <div class="field-grid">
@@ -916,7 +916,7 @@ function updateDamageDice(input) {
   const inPlayTools = input.form?.id === 'play-damage-form';
   if (inPlayTools) playDamage = {formula:value, mode:input.form.elements.mode.value, result:null};
   const output = document.getElementById(input.form?.id + '-result');
-  if (output) output.innerHTML = inPlayTools ? playResultContent(null, value) : '';
+  if (output) output.innerHTML = inPlayTools ? diceResultContent(null, value) : '';
 }
 
 function spellDamageFormula(spell) {
@@ -946,7 +946,7 @@ function playDamageCard(c) {
     diceOption(entry.id, playDamagePreset, `${entry.name} · ${entry.formula}`)).join('');
   return `<section class="card play-roll-card">
     <div class="card-title"><h2>Damage roll</h2></div>
-    ${playResultPanel('play-damage-form-result', playDamageResult(values.result, values.formula))}
+    ${diceResultPanel('play-damage-form-result', playDamageResult(values.result, values.formula))}
     ${rollSelect('Damage preset', 'id="play-damage-preset"', options)}
     ${damageRoller('play-damage-form', values)}
   </section>`;
@@ -1484,12 +1484,12 @@ function renderDamageResult(result) {
 }
 
 function playDamageResult(result, formula) {
-  if (!result) return playResultContent(null, formula);
+  if (!result) return diceResultContent(null, formula);
   const {kept, dropped, mode, modifier} = result;
   const modeLabel = damageModes.find(([value]) => value === mode)[1];
   const details = [result.formula, mode !== 'normal' && modeLabel,
     dropped && `Dropped ${dropped.total} (${dropped.dice.join(' + ')}${modifier ? ' ' + fmtSign(modifier) : ''})`];
-  return playResultContent({...kept, mod: modifier}, details.filter(Boolean).join(' · '));
+  return diceResultContent({...kept, mod: modifier}, details.filter(Boolean).join(' · '));
 }
 
 function damageRoller(id, {formula = '', mode = 'normal'} = {}, spellId = '') {
@@ -1553,11 +1553,11 @@ function rolledDice({dice, omitted, mod}) {
     <span class="muted">${fmtSign(mod)}</span></div>`;
 }
 
-function playResultPanel(id, content) {
-  return `<div id="${id}" class="dice-area play-roll-result" role="status">${content}</div>`;
+function diceResultPanel(id, content) {
+  return `<div id="${id}" class="dice-area dice-result-panel" role="status">${content}</div>`;
 }
 
-function playResultContent(result, formula) {
+function diceResultContent(result, formula) {
   return `${result ? `<strong class="dice-result">${result.total}</strong>${rolledDice(result)}` : ''}
     <div class="dice-minor">${esc(formula)}</div>`;
 }
@@ -1624,26 +1624,26 @@ function updateSpellCast(form, roll = false) {
 }
 
 function quickDiceResult({count, sides, modifier, dice, total}) {
-  return dice.length ? `<strong>${total}</strong><span class="small muted">${count}d${sides} · ${dice.join(' + ')}
-    ${modifier ? fmtSign(modifier) : ''}</span>` : '';
+  const formula = `${count}d${sides}${modifier ? fmtSign(modifier) : ''}`;
+  return diceResultContent(dice.length ? {dice, total, mod: modifier} : null, formula);
 }
 
 function quickDiceCard() {
   return `<form id="quick-dice-form" class="quick-dice-form">
+    ${diceResultPanel('quick-dice-result', quickDiceResult(quickDice))}
     ${dicePoolControls(quickDice)}
     <button type="submit" class="btn primary btn-wide">${ico('dice')} Roll dice</button>
-    <div id="quick-dice-result" class="quick-dice-result" role="status">${quickDiceResult(quickDice)}</div>
   </form>`;
 }
 
-function rollQuickDice(form) {
+function updateQuickDice(form, roll = false) {
   const data = new FormData(form);
   const count = Number(data.get('count'));
   const sides = Number(data.get('sides'));
   const modifier = Number(data.get('modifier'));
   if (!Number.isInteger(count) || count < 1 || count > diceCountMax || !diceSides.includes(sides)
       || !Number.isInteger(modifier) || modifier < diceBonusMin || modifier > diceBonusMax) return;
-  const dice = rollDice(count, sides);
+  const dice = roll ? rollDice(count, sides) : [];
   const total = dice.reduce((sum, die) => sum + die, modifier);
   quickDice = {count, sides, modifier, dice, total};
   document.getElementById('quick-dice-result').innerHTML = quickDiceResult(quickDice);
@@ -1750,7 +1750,7 @@ case 'quick-status':
   modal('Quick status', quickStatusContent(), 'quick-status');
   document.querySelector('#modal [data-action="close-modal"]')?.focus({preventScroll: true});
   break;
-case 'quick-roll': libraryReturn=undefined; libraryTrigger=undefined; castTrigger=a; modal('Roll dice',quickDiceCard()); break;
+case 'quick-roll': libraryReturn=undefined; libraryTrigger=undefined; castTrigger=a; modal('Roll dice',quickDiceCard(),'quick-roll'); break;
 case 'more-nav': modal('Navigate', '<div class="group-list">'+NAV.map(entry=>`<button class="btn" data-action="nav" data-screen="${entry.id}">${ico(entry.icon)} ${entry.label}</button>`).join('')+'</div>'); break;
 case 'rules-category': rulesCategory=a.dataset.category; rulesFamily='All'; render(); break;
 case 'reference-open': openReference(a.dataset.id, a); break;
@@ -1823,6 +1823,7 @@ document.addEventListener('click',e=>{const a=e.target.closest('[data-action]');
 document.addEventListener('change',e=>{const a=e.target;
 if(a.id==='mobile-age-picker')chooseAlwynAge(a.value, true);
 if(a.id==='rules-family'){rulesFamily=a.value;document.getElementById('rules-results').innerHTML=rulesResults();}
+if (a.form?.id === 'quick-dice-form') updateQuickDice(a.form);
 if(a.closest?.('[data-dice-builder]'))updateDamageDice(a);
 if(a.id==='new-character-class'){
   document.getElementById('new-class-summary').textContent=CLASS_RULES[a.value]?.startingDescription||'';
@@ -1834,7 +1835,7 @@ if(a.id==='play-damage-preset'){playDamagePreset=a.value;playDamage={};render();
 if(a.form?.id==='play-damage-form' && a.name==='mode'){
   const formula = a.form.elements.formula.value;
   playDamage = {formula, mode: a.value, result: null};
-  document.getElementById('play-damage-form-result').innerHTML = playResultContent(null, formula);
+  document.getElementById('play-damage-form-result').innerHTML = diceResultContent(null, formula);
 }
 if(a.matches('[data-hide-unavailable]')){hideUnavailable=a.checked;refreshSpellLists();}
 if(a.form?.id==='spell-cast-form')updateSpellCast(a.form);
@@ -1886,7 +1887,7 @@ if (['spell-damage-form','play-damage-form'].includes(e.target.id)) {
 if (e.target.id === 'spell-cast-form' || e.target.id === 'quick-dice-form') {
   e.preventDefault();
   if (e.target.id === 'spell-cast-form') updateSpellCast(e.target, true);
-  else rollQuickDice(e.target);
+  else updateQuickDice(e.target, true);
   return;
 }
 if(e.target.id==='permanent-conditions-form'){
