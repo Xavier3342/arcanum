@@ -81,6 +81,7 @@ test('mobile workspace switches preserve spell filters, damage mode, and move ro
   assert.match(app.screen(), selected('roll'));
   const tabs = app.screen().match(/<nav class="workspace-nav play-nav"[\s\S]*?<\/nav>/)[0];
   assert.deepEqual([...tabs.matchAll(/data-section="([^"]+)"/g)].map(tab => tab[1]), ['roll', 'damage']);
+  assert.ok(app.screen().indexOf('id="play-damage-form"') < app.screen().indexOf(tabs));
   assert.doesNotMatch(app.screen(), /Quick combat tracker|Move reference|Spellcasting checklist/);
   app.click('roll');
   app.click('workspace-section', {section: 'damage'});

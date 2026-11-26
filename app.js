@@ -643,7 +643,7 @@ const playDamageMoves = ['cast', 'melee', 'ranged'];
 
 function workspaceNav(page) {
   const style = {notes: 'journal-nav', play: 'play-nav'}[page] || 'mobile-workspace';
-  return `<div class="workspace-start mobile-workspace" data-workspace-start></div>
+  return `${page === 'play' ? '' : '<div class="workspace-start mobile-workspace" data-workspace-start></div>'}
   <nav class="workspace-nav ${style}" aria-label="${pageTitles[page]} sections" data-workspace-nav>
     ${workspaceSections[page].map(([id, label]) => `<button type="button" data-action="workspace-section"
       data-section="${id}" aria-pressed="${selectedSection[page] === id}">${label}</button>`).join('')}
@@ -658,11 +658,12 @@ function workspacePanel(page, id, content) {
 function selectWorkspaceSection(id, trigger) {
   if (!workspaceSections[screen]?.some(([section]) => section === id) || selectedSection[screen] === id) return;
   const nav = document.querySelector('[data-workspace-nav]');
-  const wasPinned = nav && nav.getBoundingClientRect().top <= (document.querySelector('.topbar')?.getBoundingClientRect().bottom ?? 0);
+  const wasPinned = screen !== 'play' && nav && nav.getBoundingClientRect().top <= (document.querySelector('.topbar')?.getBoundingClientRect().bottom ?? 0);
   selectedSection[screen] = id;
   render();
   const nextNav = document.querySelector('[data-workspace-nav]');
-  if (wasPinned || (trigger && !trigger.matches('[data-workspace-nav] button'))) {
+  if (screen === 'play') window.scrollTo({top: 0, behavior: 'instant'});
+  else if (wasPinned || (trigger && !trigger.matches('[data-workspace-nav] button'))) {
     document.querySelector('[data-workspace-start]')?.scrollIntoView({block: 'start', behavior: 'instant'});
   }
   if (trigger) nextNav?.querySelector('[aria-pressed="true"]')?.focus({preventScroll: true});
@@ -747,11 +748,11 @@ function playRollCard() {
 function renderPlay() {
   return `<div class="play-workspace">
     <div class="workspace-intro">${pagehead('At the table', 'Roll for moves and damage.')}</div>
-    ${workspaceNav('play')}
     <div class="play-layout">
       ${workspacePanel('play', 'roll', playRollCard())}
       ${workspacePanel('play', 'damage', playDamageCard(current()))}
     </div>
+    ${workspaceNav('play')}
   </div>`;
 }
 // Alwyn's shared library and independent age state, migrated once from earlier saves.
