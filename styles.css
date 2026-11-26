@@ -354,7 +354,14 @@
     inset: auto 14px calc(var(--mobile-nav-height) + 8px);
     margin: 0;
   }
-  .main-content:has(.play-workspace) { padding-bottom: calc(var(--mobile-nav-height) + 78px); }
+  .app-shell:has(.play-workspace) { min-height: 100dvh; }
+  .main-content:has(.play-workspace) {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    padding-block: 12px calc(var(--mobile-nav-height) + 76px);
+  }
+  .play-workspace { width: 100%; margin-block: auto; }
   .workspace-nav button {
     flex: 1 1 0;
     min-width: 0;
@@ -425,7 +432,6 @@
 }
 
 @media screen and (max-width: 720px) and (max-height: 650px) {
-  .main-content:has(.play-layout) { padding-top: 12px; }
   .play-roll-card .card-title { display: none; }
   .play-roll-fields { gap: 7px; }
   .play-roll-result { margin-block: 7px; }
