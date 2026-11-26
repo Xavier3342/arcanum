@@ -482,26 +482,28 @@ function backstoryFields(c, ageId) {
   }).join('');
 }
 
+function inventoryRow(item) {
+  const description = item.details.replace(/#[\p{L}\p{N}]+(?:-[\p{L}\p{N}]+)*/gu, tag =>
+    item.keywords.some(keyword => keyword.toLowerCase() === tag.toLowerCase()) ? '' : tag);
+  const preview = description.trim().replace(/\s+/g, ' ').replace(/\s+([,.;])/g, '$1');
+  return `<div class="group-item inventory-row">
+    <button type="button" class="inventory-open" data-action="inventory-open" data-id="${esc(item.id)}" aria-label="View ${esc(item.name)}" aria-haspopup="dialog">
+      <strong>${esc(item.name)}</strong>${preview ? `<span class="small muted">${esc(preview)}</span>` : ''}
+    </button>
+    <button type="button" class="inventory-edit" data-action="record-edit" data-key="inventory" data-id="${esc(item.id)}"
+      aria-label="Edit ${esc(item.name)}" title="Edit ${esc(item.name)}">${ico('edit')}</button>
+  </div>`;
+}
+
 function recordCard(c, key) {
   const inventory = key === 'inventory';
   const sharedJournal = !inventory && Boolean(c.alwyn);
-  const rows = (c[key] || []).map(record => {
-    const summary = inventory ? [
-      record.equipped ? 'Equipped' : 'In bag', `Qty ${record.quantity}`, record.location,
-      record.maxUses ? `${record.uses}/${record.maxUses} uses` : '',
-    ].filter(Boolean).join(' · ') : record.date;
-    const tags = inventory ? [
-      record.weapon ? ['Weapon', record.damage].filter(Boolean).join(' · ') : '',
-      ...record.keywords, ...Object.entries(record.bonuses).map(([stat, value]) => `${fmtSign(value)} ${itemBonusLabels[stat]}`),
-    ].filter(Boolean) : [];
-    return `<div class="group-item${inventory ? ' inventory-row' : ''}"><div class="record-content"><strong>${esc(record.name)}</strong>
-      <div class="micro muted">${esc(summary)}</div>${tags.length ? `<div class="pillbar inventory-tags">${tags.map(tag => pill(tag)).join('')}</div>` : ''}
-      <div class="small record-details">${esc(record.details)}</div></div><div class="record-actions">
-      ${inventory && record.keywords.length ? `<button class="btn tiny" data-action="inventory-keywords" data-id="${esc(record.id)}" aria-label="Keywords for ${esc(record.name)}" aria-haspopup="dialog">Keywords</button>` : ''}
-      ${inventory && record.maxUses ? `<button class="btn tiny" data-action="inventory-use" data-id="${esc(record.id)}" aria-label="Use ${esc(record.name)}" ${record.uses ? '' : 'disabled'}>Use</button>` : ''}
-      ${inventory && record.maxUses ? `<button class="btn tiny" data-action="inventory-refill" data-id="${esc(record.id)}" aria-label="Refill ${esc(record.name)}" ${record.uses >= record.maxUses ? 'disabled' : ''}>Refill</button>` : ''}
-      <button class="btn tiny" data-action="record-edit" data-key="${key}" data-id="${esc(record.id)}" aria-label="Edit ${esc(record.name)}">Edit</button></div></div>`;
-  }).join('');
+  const rows = (c[key] || []).map(record => inventory ? inventoryRow(record) :
+    `<div class="group-item"><div class="record-content"><strong>${esc(record.name)}</strong>
+      <div class="micro muted">${esc(record.date)}</div>
+      <div class="small record-details">${esc(record.details)}</div></div>
+      <button class="btn tiny" data-action="record-edit" data-key="${key}" data-id="${esc(record.id)}" aria-label="Edit ${esc(record.name)}">Edit</button>
+    </div>`).join('');
   const earlier = !inventory && !sharedJournal && c.notes
     ? `<details><summary>Earlier campaign notes</summary><label><span class="field-label">Notes</span><textarea data-bind="notes">${esc(c.notes)}</textarea></label></details>`
     : '';
@@ -1102,16 +1104,31 @@ function addReferenceItem(id, button) {
   button.textContent = items.length === 1 ? 'Added to inventory' : `Added ${items.length} items to inventory`;
 }
 
-function openItemKeywords(item, trigger) {
-  if (!item?.keywords.length) return;
+function openInventoryItem(item, trigger) {
+  if (!item) return;
   castTrigger = trigger;
-  const content = item.keywords.map(tag => {
+  const keywords = item.keywords.map(tag => {
     const definition = referenceById.get('tag-' + tag.slice(1).toLowerCase());
     return `<section class="reference-outcome"><h3>${esc(tag)}</h3>
       ${referenceText(definition?.body || 'Custom keyword. Use the meaning agreed at your table.')}</section>`;
   }).join('');
-  modal(item.name + ' · Keywords', `<div class="reference-body">${content}</div>`, 'reference');
-  document.querySelector('#modal .modal-head button')?.focus();
+  const stats = [
+    ['Status', item.equipped ? 'Equipped' : 'In bag'], ['Quantity', item.quantity],
+    ['Location', item.location], ['Type', item.weapon ? 'Weapon' : 'Item'], ['Damage', item.damage],
+    ...Object.entries(item.bonuses).map(([stat, value]) => [itemBonusLabels[stat], fmtSign(value)]),
+  ].filter(([, value]) => value !== '');
+  modal(item.name, `<div class="reference-dialog">
+    <dl class="inventory-facts">${stats.map(([label, value]) =>
+      `<div><dt>${esc(label)}</dt><dd>${esc(value)}</dd></div>`).join('')}</dl>
+    ${item.maxUses ? `<div class="inventory-use-controls">
+      <strong id="inventory-item-uses" role="status">${item.uses}/${item.maxUses} uses</strong>
+      <button class="btn" data-action="inventory-use" data-id="${esc(item.id)}" ${item.uses ? '' : 'disabled'}>Use</button>
+      <button class="btn" data-action="inventory-refill" data-id="${esc(item.id)}" ${item.uses >= item.maxUses ? 'disabled' : ''}>Refill</button>
+    </div>` : ''}
+    ${item.details ? `<div class="reference-body">${referenceText(item.details)}</div>` : ''}
+    ${keywords ? `<div class="reference-body"><h3>Keywords</h3>${keywords}</div>` : ''}
+  </div>`, 'reference');
+  document.querySelector('#modal .modal-head button')?.focus({preventScroll: true});
 }
 
 function currentStruggle(c) {
@@ -1668,25 +1685,25 @@ case 'record-delete': {
   render();
   break;
 }
-case 'inventory-use': {
-  const item = c.inventory.find(record => record.id === a.dataset.id);
-  if (!item?.uses) break;
-  item.uses--;
-  save();
-  render();
-  break;
-}
+case 'inventory-use':
 case 'inventory-refill': {
   const item = c.inventory.find(record => record.id === a.dataset.id);
-  if (!item || !item.maxUses || item.uses >= item.maxUses) break;
-  item.uses = item.maxUses;
+  const refill = kind === 'inventory-refill';
+  if (!item?.maxUses || (refill ? item.uses >= item.maxUses : item.uses <= 0)) break;
+  item.uses = refill ? item.maxUses : item.uses - 1;
   save();
-  render();
-  toast(`${item.name} refilled to ${item.maxUses}.`);
+  const count = document.querySelector('#inventory-item-uses');
+  if (count) {
+    count.textContent = `${item.uses}/${item.maxUses} uses`;
+    const useButton = document.querySelector('#modal [data-action="inventory-use"]');
+    const refillButton = document.querySelector('#modal [data-action="inventory-refill"]');
+    useButton.disabled = item.uses === 0;
+    refillButton.disabled = item.uses >= item.maxUses;
+  }
   break;
 }
-case 'inventory-keywords':
-  openItemKeywords(c.inventory.find(record => record.id === a.dataset.id), a);
+case 'inventory-open':
+  openInventoryItem(c.inventory.find(record => record.id === a.dataset.id), a);
   break;
 case 'nav':if(!NAV.some(entry=>entry.id===a.dataset.screen))break;closeModal();screen=a.dataset.screen;searchTerm='';render();window.scrollTo({top:0,behavior:'smooth'});break;
 case 'workspace-section': selectWorkspaceSection(a.dataset.section, a); break;

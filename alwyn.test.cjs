@@ -690,17 +690,22 @@ test('shopping lives under GM and starter items share standard equipment filters
 test('inventory refills limited items and shows all their keyword definitions', () => {
   const app = openApp();
   app.click('nav', {screen:'equipment'});
+  app.click('inventory-open', {id:'starter-potion'});
+  assert.match(app.element('modal-content').innerHTML, /1\/1 uses/);
   app.click('inventory-use', {id:'starter-potion'});
-  assert.match(app.screen(), /0\/1 uses/);
+  assert.equal(app.state().characters[0].inventory.find(item => item.id === 'starter-potion').uses, 0);
   app.click('inventory-refill', {id:'starter-potion'});
   assert.equal(app.state().characters[0].inventory.find(item => item.id === 'starter-potion').uses, 1);
   app.click('reference-add-item', {id:'starting-razor-dagger'});
   const dagger = app.state().characters[0].inventory.find(item => item.name === 'Razor dagger');
   app.click('nav', {screen:'equipment'});
-  assert.match(app.screen(), /aria-label="Keywords for Razor dagger"/);
-  app.click('inventory-keywords', {id:dagger.id});
+  assert.match(app.screen(), /aria-label="View Razor dagger"/);
+  assert.match(app.screen(), /aria-label="Edit Razor dagger"/);
+  assert.doesNotMatch(app.screen(), /#piercing|inventory-refill|inventory-use/);
+  app.click('inventory-open', {id:dagger.id});
   const dialog = app.element('modal-content').innerHTML;
-  assert.equal(app.element('modal-title').textContent, 'Razor dagger · Keywords');
+  assert.equal(app.element('modal-title').textContent, 'Razor dagger');
+  assert.match(dialog, /<dt>Damage<\/dt><dd>1d4/);
   for (const word of dagger.keywords) assert.ok(dialog.includes('<h3>' + word + '</h3>'), word);
   assert.match(dialog, /ignores armor and shield protection/i);
 });
