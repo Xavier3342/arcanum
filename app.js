@@ -114,7 +114,7 @@ let libraryReturn;
 let hideUnavailable = false;
 let playDamage = {}, playDamagePreset = '', rulesCategory = 'All', rulesSearch = '', pathClassFilter = 'All';
 const spellCategories = ['Defense', 'Mobility', 'Control', 'Attack', 'Utility', 'Other'];
-const diceSides = [3, 6, 8, 10, 12, 20];
+const diceSides = [3, 4, 6, 8, 10, 12, 20];
 const currentCharacter=()=>db.characters.find(c=>c.id===db.activeId)||db.characters[0];
 const ages = [
   {id: 'prodigy', name: 'The Prodigy', years: '14–15', style: 'Wind Dancer', stat: 'DEX', schools: ['Illusion', 'Evocation', 'Divination']},
