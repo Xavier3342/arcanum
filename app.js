@@ -639,7 +639,6 @@ const workspaceSections = {
   notes: [['journal', 'Shared journal'], ['struggle', 'Struggle'], ['relationships', 'Relationships']],
 };
 const selectedSection = {magic: 'spells', play: 'roll', notes: 'journal'};
-const playDamageMoves = ['cast', 'melee', 'ranged'];
 
 function workspaceNav(page) {
   const style = {notes: 'journal-nav', play: 'play-nav'}[page] || 'mobile-workspace';
@@ -726,6 +725,7 @@ function playRollCard() {
   const formula = `2d6 + ${stat} (${fmtSign(modifier)})`;
   return `<section class="card play-roll-card">
     <div class="card-title"><h2>Dice roller</h2></div>
+    ${playResultPanel('play-roll-result', playResultContent(diceLast, formula))}
     <div class="play-roll-fields">
       ${rollSelect('Roll type', 'data-bind="__diceMode"', playRollTypes.map(({id, name}) => diceOption(id, diceMode, name)).join(''))}
       <div class="field-grid">
@@ -734,13 +734,7 @@ function playRollCard() {
       </div>
     </div>
     ${penalties.length ? `<p class="micro muted play-roll-penalty">${esc(penalties.join(' · '))} — disadvantage</p>` : ''}
-    <div class="dice-area play-roll-result" aria-live="polite">
-      ${diceLast ? rollResult(diceLast, false) : `<div class="dice-minor">${formula}</div>`}
-    </div>
-    <div class="play-roll-actions">
-      <button class="btn primary" data-action="roll" ${tooHigh ? 'disabled' : ''}>${ico('dice')} Roll dice</button>
-      ${playDamageMoves.includes(diceMode) ? `<button class="btn" data-action="workspace-section" data-section="damage">${ico('dice')} Roll damage</button>` : ''}
-    </div>
+    <button class="btn primary" data-action="roll" ${tooHigh ? 'disabled' : ''}>${ico('dice')} Roll dice</button>
     ${tooHigh ? `<p class="micro muted play-roll-penalty">MAG exceeds ${stat}. Use a ritual.</p>` : ''}
   </section>`;
 }
@@ -919,9 +913,10 @@ function updateDamageDice(input) {
   }
   builder.querySelector('input[type="hidden"]').value = value;
   builder.querySelector('[data-damage-preview]').textContent = value || 'No damage selected';
-  if (input.form?.id === 'play-damage-form') playDamage = {formula:value, mode:input.form.elements.mode.value, result:null};
+  const inPlayTools = input.form?.id === 'play-damage-form';
+  if (inPlayTools) playDamage = {formula:value, mode:input.form.elements.mode.value, result:null};
   const output = document.getElementById(input.form?.id + '-result');
-  if (output) output.textContent = '';
+  if (output) output.innerHTML = inPlayTools ? playResultContent(null, value) : '';
 }
 
 function spellDamageFormula(spell) {
@@ -930,28 +925,31 @@ function spellDamageFormula(spell) {
 
 function damagePresets(c) {
   return [
-    ['Attack spells', c.spells.filter(spell => spellCategory(spell) === 'Attack' && canCastSpell(c, spell)).map(spell => ({
+    ...c.spells.filter(spell => spellCategory(spell) === 'Attack' && canCastSpell(c, spell)).map(spell => ({
       id: 'spell:' + spell.id, name: spell.name, formula: spellDamageFormula(spell),
-    })).filter(preset => preset.formula)],
-    ['Equipped weapons', c.inventory.filter(item => item.equipped && item.weapon && item.damage).map(item => ({
+    })).filter(preset => preset.formula),
+    ...c.inventory.filter(item => item.equipped && item.weapon && item.damage).map(item => ({
       id: 'weapon:' + item.id, name: item.name, formula: item.damage,
-    }))],
+    })),
   ];
 }
 
 function playDamageCard(c) {
-  const groups = damagePresets(c);
-  const preset = groups.flatMap(([, presets]) => presets).find(entry => entry.id === playDamagePreset);
+  const presets = damagePresets(c);
+  const preset = presets.find(entry => entry.id === playDamagePreset);
   if (playDamagePreset && !preset) {
     playDamagePreset = '';
     playDamage = {};
   }
-  const values = {formula: preset?.formula, ...playDamage};
-  const options = diceOption('', playDamagePreset, 'Choose dice manually') + groups.filter(([, entries]) => entries.length)
-    .map(([label, entries]) => `<optgroup label="${label}">${entries.map(entry =>
-      diceOption(entry.id, playDamagePreset, `${entry.name} · ${entry.formula}`)).join('')}</optgroup>`).join('');
-  return infoCard('Damage roll', `<div class="block-stack">
-    ${rollSelect('Damage preset', 'id="play-damage-preset"', options)}${damageRoller('play-damage-form', values)}</div>`);
+  const values = {formula: preset?.formula || '1d6', ...playDamage};
+  const options = diceOption('', playDamagePreset, 'Choose dice manually') + presets.map(entry =>
+    diceOption(entry.id, playDamagePreset, `${entry.name} · ${entry.formula}`)).join('');
+  return `<section class="card play-roll-card">
+    <div class="card-title"><h2>Damage roll</h2></div>
+    ${playResultPanel('play-damage-form-result', playDamageResult(values.result, values.formula))}
+    ${rollSelect('Damage preset', 'id="play-damage-preset"', options)}
+    ${damageRoller('play-damage-form', values)}
+  </section>`;
 }
 
 const referenceTabs = ['All', 'Core moves', 'Classes', 'Paths', 'Equipment', 'Keywords', 'Struggles', 'GM'];
@@ -1485,12 +1483,22 @@ function renderDamageResult(result) {
     ${dropped ? ` · Dropped ${dropped.total} (${detail(dropped)})` : ''}</span>`;
 }
 
-function damageRoller(id, {formula = '', mode = 'normal', result = null} = {}, spellId = '') {
+function playDamageResult(result, formula) {
+  if (!result) return playResultContent(null, formula);
+  const {kept, dropped, mode, modifier} = result;
+  const modeLabel = damageModes.find(([value]) => value === mode)[1];
+  const details = [result.formula, mode !== 'normal' && modeLabel,
+    dropped && `Dropped ${dropped.total} (${dropped.dice.join(' + ')}${modifier ? ' ' + fmtSign(modifier) : ''})`];
+  return playResultContent({...kept, mod: modifier}, details.filter(Boolean).join(' · '));
+}
+
+function damageRoller(id, {formula = '', mode = 'normal'} = {}, spellId = '') {
   return `<form id="${id}" class="damage-roller" data-damage-form data-spell-id="${esc(spellId || '')}">
     ${damageDiceControls('formula', formula)}
     ${rollSelect('Damage roll', 'name="mode"', damageModes.map(([value, label]) => diceOption(value, mode, label)).join(''))}
     <button class="btn primary" type="submit">${ico('dice')} Roll damage</button>
-    <div id="${id}-result" class="quick-dice-result damage-result" role="status">${renderDamageResult(result)}</div></form>`;
+    ${spellId ? `<div id="${id}-result" class="quick-dice-result damage-result" role="status"></div>` : ''}
+  </form>`;
 }
 
 function rollDamage(form) {
@@ -1498,6 +1506,8 @@ function rollDamage(form) {
   const formula = parseDamageFormula(data.get('formula'));
   const mode = data.get('mode');
   const output = document.getElementById(form.id + '-result');
+  const inPlayTools = form.id === 'play-damage-form';
+  if (inPlayTools) window.scrollTo({top: 0, behavior: 'instant'});
   if (!formula || !damageModes.some(([value]) => value === mode)) {
     output.textContent = 'Choose the damage dice and roll mode.';
     return;
@@ -1507,10 +1517,10 @@ function rollDamage(form) {
     return;
   }
   const result = damageRoll(formula, mode);
-  if (form.id === 'play-damage-form') playDamage = {formula: formula.formula, mode, result};
+  if (inPlayTools) playDamage = {formula: formula.formula, mode, result};
   const spell = current().spells.find(spell => spell.id === form.dataset?.spellId);
   if (spell && spell.damage !== formula.formula) { spell.damage = formula.formula; save(); }
-  output.innerHTML = renderDamageResult(result);
+  output.innerHTML = inPlayTools ? playDamageResult(result, formula.formula) : renderDamageResult(result);
 }
 
 const spellcastingStat = c => ['Cleric', 'Druid'].includes(c.className) ? 'WIS' : 'INT';
@@ -1537,12 +1547,25 @@ function resolveMoveRoll({stat, modifier, mode}) {
   };
 }
 
-function rollResult(result, showOutcome = true) {
-  return `<div class="rolling-number">${result.dice.map((die, i) =>
-    `<div class="roll-die" ${result.omitted === i ? 'aria-label="Discarded die" style="opacity:.35;text-decoration:line-through"' : ''}>${die}</div>`).join('')}
-    <span class="muted">${fmtSign(result.mod)}</span></div>
+function rolledDice({dice, omitted, mod}) {
+  return `<div class="rolling-number">${dice.map((die, i) =>
+    `<div class="roll-die" ${omitted === i ? `aria-label="Discarded die: ${die}" style="opacity:.35;text-decoration:line-through"` : ''}>${die}</div>`).join('')}
+    <span class="muted">${fmtSign(mod)}</span></div>`;
+}
+
+function playResultPanel(id, content) {
+  return `<div id="${id}" class="dice-area play-roll-result" role="status">${content}</div>`;
+}
+
+function playResultContent(result, formula) {
+  return `${result ? `<strong class="dice-result">${result.total}</strong>${rolledDice(result)}` : ''}
+    <div class="dice-minor">${esc(formula)}</div>`;
+}
+
+function rollResult(result) {
+  return `${rolledDice(result)}
     <div class="dice-result">${result.total}</div>
-    ${showOutcome ? `<div class="dice-summary">${esc(result.outcome)} · ${esc(result.mode)}</div>` : ''}`;
+    <div class="dice-summary">${esc(result.outcome)} · ${esc(result.mode)}</div>`;
 }
 
 function castCheck(c, spell, magnitude, extra) {
@@ -1674,6 +1697,7 @@ function roll() {
   }
   diceLast = resolveMoveRoll(spec);
   render();
+  window.scrollTo({top: 0, behavior: 'instant'});
 }
 function changeBind(path,val){if(path==='__diceMode'){diceMode=val;diceLast=null;render();return;}const c=current(),segments=path.split('.');let cur=c;for(let i=0;i<segments.length-1;i++)cur=cur[segments[i]]||(cur[segments[i]]={});const last=segments.at(-1);if(['hpBonus','armorBonus','level','treasure'].includes(path))val=Number(val)||0;cur[last]=val;scheduleSave();if(path==='name'&&!c.alwyn){document.getElementById('page-eyebrow').textContent=String(val).slice(0,24).toUpperCase();}}
 function refreshAfterChange(path){if(['level','hpBonus','armorBonus','wealth','name','origins.portrait'].includes(path))render();}
@@ -1808,8 +1832,9 @@ if(a.id==='inventory-type')document.getElementById('inventory-damage').hidden=a.
 if(a.id==='play-damage-preset'){playDamagePreset=a.value;playDamage={};render();
   document.getElementById('play-damage-preset').focus?.({preventScroll:true});}
 if(a.form?.id==='play-damage-form' && a.name==='mode'){
-  playDamage = {...playDamage, mode: a.value, result: null};
-  document.getElementById('play-damage-form-result').textContent = '';
+  const formula = a.form.elements.formula.value;
+  playDamage = {formula, mode: a.value, result: null};
+  document.getElementById('play-damage-form-result').innerHTML = playResultContent(null, formula);
 }
 if(a.matches('[data-hide-unavailable]')){hideUnavailable=a.checked;refreshSpellLists();}
 if(a.form?.id==='spell-cast-form')updateSpellCast(a.form);

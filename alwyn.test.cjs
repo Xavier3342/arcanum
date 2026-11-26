@@ -82,12 +82,14 @@ test('mobile workspace switches preserve spell filters, damage mode, and move ro
   const tabs = app.screen().match(/<nav class="workspace-nav play-nav"[\s\S]*?<\/nav>/)[0];
   assert.deepEqual([...tabs.matchAll(/data-section="([^"]+)"/g)].map(tab => tab[1]), ['roll', 'damage']);
   assert.ok(app.screen().indexOf('id="play-damage-form"') < app.screen().indexOf(tabs));
+  assert.match(app.screen(), /id="play-roll-result" class="dice-area play-roll-result"[\s\S]*data-bind="__diceMode"/);
+  assert.match(app.screen(), /id="play-damage-form-result" class="dice-area play-roll-result"[\s\S]*id="play-damage-preset"/);
   assert.doesNotMatch(app.screen(), /Quick combat tracker|Move reference|Spellcasting checklist/);
   app.click('roll');
   app.click('workspace-section', {section: 'damage'});
   assert.match(app.screen(), selected('damage'));
   assert.match(app.screen(), /id="play-damage-form"/);
-  app.change('', {form: {id: 'play-damage-form'}, name: 'mode', value: 'maximum'});
+  app.change('', {form: {id: 'play-damage-form', elements: {formula: {value: '1d6'}}}, name: 'mode', value: 'maximum'});
   app.click('quick-status');
   app.click('hp', {delta: '-1'});
   assert.match(app.screen(), selected('damage'));
@@ -325,9 +327,9 @@ test('a spell can save a damage formula and roll separately from weapon moves', 
   app.change('[data-bind]', {dataset: {bind: '__diceMode'}, value: 'melee'});
   assert.match(app.screen(), /Damage roll/);
   app.submit('play-damage-form', {formula: 'd8+2', mode: 'minimum'});
-  assert.match(app.element('play-damage-form-result').innerHTML, /3 damage/);
+  assert.match(app.element('play-damage-form-result').innerHTML, /class="dice-result">3</);
   app.click('roll');
-  assert.match(app.screen(), /3 damage/);
+  assert.match(app.screen(), /id="play-damage-form-result"[^>]*><strong class="dice-result">3</);
   app.submit('play-damage-form', {formula: '0d6', mode: 'normal'});
   assert.match(app.element('play-damage-form-result').textContent, /Choose the damage dice/);
   assert.equal(app.state().characters[0].hp, kid.hp);
@@ -411,21 +413,21 @@ test('Play tools rolls saved and legacy spell damage and remembers chosen dice',
   const spell=kid.spells.find(spell=>spell.name==='Arcane Dart');
   const app=openApp({characters:[kid],activeId:kid.id},()=>0.5);
   app.click('nav',{screen:'play'});
-  assert.match(app.screen(),/Attack spells/);
+  assert.doesNotMatch(app.screen(), /<optgroup|Attack spells|Equipped weapons/);
   assert.match(app.screen(),/>Arcane Dart · 1d4<\/option>/);
   app.change('',{id:'play-damage-preset',value:'spell:'+spell.id});
   assert.match(app.screen(),/name="formula" value="1d4"/);
   assert.match(app.screen(),/<option value="4" selected>d4<\/option>/);
   app.submit('play-damage-form',{formula:'2d4+1',mode:'normal'});
-  assert.match(app.element('play-damage-form-result').innerHTML,/7 damage/);
+  assert.match(app.element('play-damage-form-result').innerHTML, /class="dice-result">7</);
   assert.equal(app.state().characters[0].spells.find(entry=>entry.id===spell.id).damage,spell.damage);
   app.click('roll');
-  assert.match(app.screen(),/7 damage/);
+  assert.match(app.screen(), /id="play-damage-form-result"[^>]*><strong class="dice-result">7</);
   app.click('spell-cast',{id:spell.id});
   assert.match(app.element('modal-content').innerHTML,/name="formula" value="1d4"/);
   app.click('close-modal');
   app.click('forget', {school: 'Evocation'});
-  assert.doesNotMatch(app.screen(), /Arcane Dart|School unavailable|Attack spells|7 damage/);
+  assert.doesNotMatch(app.screen(), /Arcane Dart|School unavailable|id="play-damage-form-result"[^>]*><strong/);
   assert.match(app.screen(), /name="formula" value="1d6"/);
   app.click('remember', {school: 'Evocation'});
   assert.match(app.screen(), />Arcane Dart · 1d4<\/option>/);
@@ -461,13 +463,13 @@ test('Play tools lists attribute rolls, casting, and Trade Blows', () => {
   assert.deepEqual([...options.matchAll(/<option[^>]*>([^<]+)<\/option>/g)].map(match => match[1]),
     ['STR', 'DEX', 'INT', 'WIS', 'CHA', 'Cast a Spell', 'Trade Blows (STR)', 'Trade Blows (DEX)']);
   const rollType = id => app.change('[data-bind]', {dataset: {bind: '__diceMode'}, value: id});
-  const damageShortcut = /class="btn" data-action="workspace-section" data-section="damage"/;
   const rolls = [['str', 7], ['dex', 9], ['int', 10], ['wis', 8], ['cha', 8],
     ['cast', 10], ['melee', 7], ['ranged', 9]];
   for (const [id, total] of rolls) {
     rollType(id);
     assert.equal(/id="dice-mag"/.test(app.screen()), id === 'cast');
-    assert.equal(damageShortcut.test(app.screen()), ['cast', 'melee', 'ranged'].includes(id));
+    const rollCard = app.screen().slice(0, app.screen().indexOf('id="play-damage-form-result"'));
+    assert.doesNotMatch(rollCard, /Roll damage/);
     app.click('roll');
     assert.match(app.screen(), new RegExp(`class="dice-result">${total}<`));
   }

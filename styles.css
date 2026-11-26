@@ -135,7 +135,6 @@
   select[data-roll-select] option:checked { background: var(--accent-glow); color: var(--accent); }
   select[data-roll-select] option:hover, select[data-roll-select] option:focus-visible { background: var(--surface-3); }
   select[data-roll-select] option::checkmark { order: 1; margin-inline-start: auto; color: var(--accent); }
-  select[data-roll-select] optgroup { padding: 0 3px; font-size: 0.8rem; color: var(--muted); }
 }
 
 .spellbook-header {
@@ -279,22 +278,20 @@
 .quick-status-actions .btn { min-height: 42px; padding: 5px; gap: 4px; font-size: 12px; white-space: normal; }
 .quick-status-actions .btn.danger { grid-column: 1 / -1; }
 
-.play-roll-card .card-title { margin-bottom: 12px; }
+.play-roll-card { display: grid; gap: 10px; }
+.play-roll-card .card-title { margin: 0; }
 .play-roll-fields { display: grid; gap: 10px; }
 .play-roll-fields .field-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
 .play-roll-fields .field-grid > label:only-child { grid-column: 1 / -1; }
 .play-roll-result {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 12px;
-  margin: 10px 0;
-  padding: 8px;
+  display: grid;
+  gap: 6px;
+  padding: 10px 12px;
 }
-.play-roll-result .dice-result { font-size: 32px; margin: 0; }
+.play-roll-result .dice-result { font-size: clamp(52px, 13vw, 64px); margin: 0; color: var(--accent); }
 .play-roll-result .roll-die { width: 31px; height: 31px; font-size: 15px; }
-.play-roll-penalty { margin: 8px 0 0; }
-.play-roll-actions { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: 8px; }
+.play-roll-penalty { margin: 0; }
+#play-damage-form [data-damage-preview] { display: none; }
 
 .mobile-workspace { display: none; }
 .workspace-panel { align-content: start; min-width: 0; }
@@ -361,7 +358,7 @@
     flex-direction: column;
     padding-block: 12px calc(var(--mobile-nav-height) + 76px);
   }
-  .play-workspace { width: 100%; margin-block: auto; }
+  .play-workspace { width: 100%; margin-block-start: auto; }
   .workspace-nav button {
     flex: 1 1 0;
     min-width: 0;
@@ -417,7 +414,7 @@
   .spellbook-panel .spell-card .icon-btn { width: 44px; height: 44px; }
   .play-roll-card { padding: 12px; }
   .play-roll-card .field-label { margin-bottom: 3px; }
-  .play-roll-actions .btn { min-height: 44px; padding-inline: 6px; }
+  .play-roll-card .btn { min-height: 44px; }
   .play-roll-fields select, #modal select { font-size: 16px; }
   .play-layout .field-grid, #spell-cast-form .field-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .magic-layout input:not([type="checkbox"]), .magic-layout select,
@@ -434,5 +431,4 @@
 @media screen and (max-width: 720px) and (max-height: 650px) {
   .play-roll-card .card-title { display: none; }
   .play-roll-fields { gap: 7px; }
-  .play-roll-result { margin-block: 7px; }
 }
