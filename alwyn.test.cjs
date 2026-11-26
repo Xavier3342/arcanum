@@ -79,16 +79,19 @@ test('mobile workspace switches preserve spell filters, damage mode, and move ro
 
   app.click('nav', {screen: 'play'});
   assert.match(app.screen(), selected('roll'));
+  const tabs = app.screen().match(/<nav class="workspace-nav play-nav"[\s\S]*?<\/nav>/)[0];
+  assert.deepEqual([...tabs.matchAll(/data-section="([^"]+)"/g)].map(tab => tab[1]), ['roll', 'damage']);
+  assert.doesNotMatch(app.screen(), /Quick combat tracker|Move reference|Spellcasting checklist/);
   app.click('roll');
   app.click('workspace-section', {section: 'damage'});
   assert.match(app.screen(), selected('damage'));
   assert.match(app.screen(), /id="play-damage-form"/);
   app.change('', {form: {id: 'play-damage-form'}, name: 'mode', value: 'maximum'});
-  app.click('workspace-section', {section: 'status'});
+  app.click('quick-status');
   app.click('hp', {delta: '-1'});
-  assert.match(app.screen(), selected('status'));
+  assert.match(app.screen(), selected('damage'));
   assert.equal(app.state().characters[0].hp, 6);
-  app.click('workspace-section', {section: 'damage'});
+  app.click('close-modal');
   assert.match(app.screen(), /value="maximum" selected/);
   app.click('workspace-section', {section: 'roll'});
   assert.match(app.screen(), /class="dice-result">10/);
@@ -139,6 +142,9 @@ test('quick status updates the active age and backstory stays with its profile',
   assert.doesNotMatch(app.screen(), /Character backstory|Court mage history/);
   app.click('quick-status');
   assert.match(app.element('modal-content').innerHTML, /The Noble/);
+  assert.match(app.element('modal-content').innerHTML, /data-action="make-camp"/);
+  assert.match(app.element('modal-content').innerHTML, /data-action="permanent-conditions"/);
+  assert.doesNotMatch(app.element('modal-content').innerHTML, /data-action="reach-limit"/);
   app.click('hp', {delta: '-1'});
   app.click('condition', {condition: 'Insecure', state: 'marked'});
   assert.match(app.element('modal-content').innerHTML, /data-condition="Insecure" data-state="marked" aria-pressed="true"/);
@@ -146,6 +152,12 @@ test('quick status updates the active age and backstory stays with its profile',
   assert.equal(saved.hp, prodigy.hp - 1);
   assert.equal(saved.alwyn.forms.noble.conditions.Insecure, 'marked');
   assert.equal(saved.conditions.Insecure, 'clear');
+  for (const condition of Object.keys(saved.alwyn.forms.noble.conditions)) {
+    app.click('condition', {condition, state: 'marked'});
+  }
+  assert.match(app.element('modal-content').innerHTML, /data-action="reach-limit"/);
+  app.click('reach-limit');
+  assert.equal(app.element('modal-title').textContent, 'Reach Your Limit');
   app.click('close-modal');
   assert.equal(app.element('modal').dataset.view, '');
 });
@@ -230,7 +242,7 @@ test('spell cards prefill MAG and use the active character’s casting penalty',
   app.click('nav', {screen: 'magic'});
   assert.match(app.screen(), /aria-label="Cast Brief Invisibility"/);
   app.click('spell-cast', {id: spell.id});
-  assert.match(app.element('modal-content').innerHTML, /<select[^>]*name="mag">[\s\S]*?<option value="0" selected/);
+  assert.match(app.element('modal-content').innerHTML, /<select[^>]*name="mag" data-roll-select>[\s\S]*?<option value="0" selected/);
   assert.match(app.element('modal-content').innerHTML, /Normal cast/);
 
   app.submit('spell-cast-form', {mag: '2', extra: 'normal'}, {id: spell.id});
@@ -430,12 +442,12 @@ test('dice selectors contain only 1–5 dice and −1 to +5 without option group
     assert.doesNotMatch(bonusSelect, /optgroup/);
   };
   app.click('quick-roll');
-  check(app.element('modal-content').innerHTML, /<select name="count">([\s\S]*?)<\/select>/, /<select name="modifier">([\s\S]*?)<\/select>/);
-  const freeSides = app.element('modal-content').innerHTML.match(/<select name="sides">([\s\S]*?)<\/select>/)[1];
+  check(app.element('modal-content').innerHTML, /<select name="count" data-roll-select>([\s\S]*?)<\/select>/, /<select name="modifier" data-roll-select>([\s\S]*?)<\/select>/);
+  const freeSides = app.element('modal-content').innerHTML.match(/<select name="sides" data-roll-select>([\s\S]*?)<\/select>/)[1];
   assert.deepEqual(values(freeSides), [3, 4, 6, 8, 10, 12, 20]);
   app.click('nav', {screen: 'play'});
-  check(app.screen(), /<select data-damage-count>([\s\S]*?)<\/select>/, /<select data-damage-modifier>([\s\S]*?)<\/select>/);
-  const damageSides = app.screen().match(/<select data-damage-sides>([\s\S]*?)<\/select>/)[1];
+  check(app.screen(), /<select data-damage-count data-roll-select>([\s\S]*?)<\/select>/, /<select data-damage-modifier data-roll-select>([\s\S]*?)<\/select>/);
+  const damageSides = app.screen().match(/<select data-damage-sides data-roll-select>([\s\S]*?)<\/select>/)[1];
   assert.deepEqual(values(damageSides), [3, 4, 6, 8, 10, 12, 20]);
   app.submit('play-damage-form', {formula: '6d6', mode: 'normal'});
   assert.match(app.element('play-damage-form-result').textContent, /Choose up to 5 dice/);
@@ -444,11 +456,11 @@ test('dice selectors contain only 1–5 dice and −1 to +5 without option group
 test('Play tools lists attribute rolls, casting, and Trade Blows', () => {
   const app = openApp(null, () => 0.5);
   app.click('nav', {screen: 'play'});
-  const options = app.screen().match(/<select data-bind="__diceMode">([\s\S]*?)<\/select>/)[1];
+  const options = app.screen().match(/<select data-bind="__diceMode" data-roll-select>([\s\S]*?)<\/select>/)[1];
   assert.deepEqual([...options.matchAll(/<option[^>]*>([^<]+)<\/option>/g)].map(match => match[1]),
     ['STR', 'DEX', 'INT', 'WIS', 'CHA', 'Cast a Spell', 'Trade Blows (STR)', 'Trade Blows (DEX)']);
   const rollType = id => app.change('[data-bind]', {dataset: {bind: '__diceMode'}, value: id});
-  const damageShortcut = /class="btn mobile-workspace" data-action="workspace-section" data-section="damage"/;
+  const damageShortcut = /class="btn" data-action="workspace-section" data-section="damage"/;
   const rolls = [['str', 7], ['dex', 9], ['int', 10], ['wis', 8], ['cha', 8],
     ['cast', 10], ['melee', 7], ['ranged', 9]];
   for (const [id, total] of rolls) {

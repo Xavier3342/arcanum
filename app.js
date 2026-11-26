@@ -635,15 +635,16 @@ ${infoCard('Experience & level',`<div class="flex-spread"><div><div class="field
 function schoolBlock(s,c){const owned=bonusSchools(c).includes(s.id),active=allPrepared(c).includes(s.id),checked=c.prepared.includes(s.id),forgotten=c.forgotten.includes(s.id),availability=owned?'Path bonus':checked?'Prepared':'Not prepared';const ext=PATHS.find(p=>p.school===s.id&&hasPath(c,p.id));return `<div class="group-item"><label class="school-card ${active?'active':''} ${owned?'disabled':''}" style="flex:1"><input hidden type="checkbox" data-school="${s.id}" ${checked||owned?'checked':''} ${owned?'disabled':''}/><div class="school-check">✓</div><div><div class="school-name">${s.id} ${owned?pill('Path bonus','accent'):''}</div><div class="school-desc">Substance: ${esc(s.sub)}</div><div class="school-verbs">Verbs: ${esc([...s.verbs,...(ext?.extra||[])].join(' · '))}</div>${forgotten?'<div class="school-lock">Forgotten until Make Camp</div>':''}</div></label>${forgotten?`<button class="btn tiny" data-action="remember" data-school="${s.id}">Restore</button>`:active?`<button class="btn tiny" data-action="forget" data-school="${s.id}">Forget</button>`:pill(availability)}</div>`}
 const workspaceSections = {
   magic: [['spells', 'Spells'], ['schools', 'Schools']],
-  play: [['roll', 'Roll'], ['damage', 'Damage'], ['status', 'Status'], ['rules', 'Rules']],
+  play: [['roll', 'Roll'], ['damage', 'Damage']],
   notes: [['journal', 'Shared journal'], ['struggle', 'Struggle'], ['relationships', 'Relationships']],
 };
 const selectedSection = {magic: 'spells', play: 'roll', notes: 'journal'};
 const playDamageMoves = ['cast', 'melee', 'ranged'];
 
 function workspaceNav(page) {
+  const style = {notes: 'journal-nav', play: 'play-nav'}[page] || 'mobile-workspace';
   return `<div class="workspace-start mobile-workspace" data-workspace-start></div>
-  <nav class="workspace-nav ${page === 'notes' ? 'journal-nav' : 'mobile-workspace'}" aria-label="${pageTitles[page]} sections" data-workspace-nav>
+  <nav class="workspace-nav ${style}" aria-label="${pageTitles[page]} sections" data-workspace-nav>
     ${workspaceSections[page].map(([id, label]) => `<button type="button" data-action="workspace-section"
       data-section="${id}" aria-pressed="${selectedSection[page] === id}">${label}</button>`).join('')}
   </nav>`;
@@ -725,7 +726,7 @@ function playRollCard() {
   return `<section class="card play-roll-card">
     <div class="card-title"><h2>Dice roller</h2></div>
     <div class="play-roll-fields">
-      ${select('Roll type', '__diceMode', diceMode, playRollTypes)}
+      ${rollSelect('Roll type', 'data-bind="__diceMode"', playRollTypes.map(({id, name}) => diceOption(id, diceMode, name)).join(''))}
       <div class="field-grid">
         ${diceMode === 'cast' ? magnitudeSelect('id="dice-mag"', diceMag, '?') : ''}
         ${rollModifierSelect('id="dice-extra"', diceExtra)}
@@ -737,22 +738,22 @@ function playRollCard() {
     </div>
     <div class="play-roll-actions">
       <button class="btn primary" data-action="roll" ${tooHigh ? 'disabled' : ''}>${ico('dice')} Roll dice</button>
-      ${playDamageMoves.includes(diceMode) ? `<button class="btn mobile-workspace" data-action="workspace-section" data-section="damage">${ico('dice')} Roll damage</button>` : ''}
+      ${playDamageMoves.includes(diceMode) ? `<button class="btn" data-action="workspace-section" data-section="damage">${ico('dice')} Roll damage</button>` : ''}
     </div>
     ${tooHigh ? `<p class="micro muted play-roll-penalty">MAG exceeds ${stat}. Use a ritual.</p>` : ''}
   </section>`;
 }
 
 function renderPlay() {
-  const c = current();
-  return `<div class="workspace-intro">${pagehead('At the table','Combat, checks, and session upkeep.')}</div>`
-    + workspaceNav('play') + `<div class="cols-2 play-layout"><div class="block-stack play-column">
-${workspacePanel('play', 'roll', playRollCard())}
-${workspacePanel('play', 'damage', playDamageCard(c))}
-${workspacePanel('play', 'rules', infoCard('Move reference',`<div class="group-list"><div class="group-item" style="display:block"><strong>Cast a Spell +INT</strong><div class="small muted">10+: effect works · 7–9: effect works with Condition, GM twist or forget a school · 6−: trouble +1 XP.</div></div><div class="group-item" style="display:block"><strong>Trade Blows +STR/+DEX</strong><div class="small muted">Typically exchange damage. On 10+ gain a benefit; on 7–9 accept complication; on 6− choose minimum dealt or maximum suffered.</div></div><div class="group-item" style="display:block"><strong>Defy Danger +appropriate stat</strong><div class="small muted">10+: overcome obstacle · 7–9: succeed with drawback · 6−: things go wrong.</div></div><div class="group-item" style="display:block"><strong>Mirror Image · Illusionist Move</strong><div class="small muted">If learned, mark a Condition when taking damage to prevent all of it and reveal a #near position.</div></div></div>`))}
-</div><div class="block-stack play-column">${workspacePanel('play', 'status', infoCard('Quick combat tracker', hitPointControls(c) + `<button class="btn btn-wide" style="margin-top:15px" data-action="make-camp">${ico('refresh')} Make Camp</button>`) + conditionsPanel(c))}
-${workspacePanel('play', 'rules', infoCard('Spellcasting checklist',`<div class="group-list"><div class="group-item">${ico('check-circle')} Arcane focus available</div><div class="group-item">${ico('check-circle')} Both hands otherwise free</div><div class="group-item">${ico('check-circle')} Able to speak aloud</div><div class="group-item">${ico('check-circle')} Verb + substance from currently available schools</div></div><p class="footnote" style="margin-top:14px">For your mobility/illusion build, remember that ranged spell attacks use Cast a Spell +INT, while a physical bow uses Trade Blows +DEX.</p>`))}
-</div></div>`;}
+  return `<div class="play-workspace">
+    <div class="workspace-intro">${pagehead('At the table', 'Roll for moves and damage.')}</div>
+    ${workspaceNav('play')}
+    <div class="play-layout">
+      ${workspacePanel('play', 'roll', playRollCard())}
+      ${workspacePanel('play', 'damage', playDamageCard(current()))}
+    </div>
+  </div>`;
+}
 // Alwyn's shared library and independent age state, migrated once from earlier saves.
 function migrateCharacter(character) {
   migrateInventory(character);
@@ -807,6 +808,11 @@ function quickStatusContent() {
     ${c.alwyn ? `<div class="small muted">${esc(activeAge().name)}</div>` : ''}
     ${hitPointControls(c)}
     ${conditionsPanel(c, true)}
+    <div class="quick-status-actions">
+      <button class="btn" data-action="make-camp">${ico('refresh')} Make Camp</button>
+      <button class="btn" data-action="permanent-conditions">Permanent conditions</button>
+      ${conditionCount(c) >= CONDITIONS.length ? '<button class="btn danger" data-action="reach-limit">Reach Your Limit</button>' : ''}
+    </div>
   </div>`;
 }
 
@@ -844,6 +850,10 @@ function diceOption(value, selected, label = value) {
   return `<option value="${esc(value)}" ${String(value) === String(selected) ? 'selected' : ''}>${esc(label)}</option>`;
 }
 
+function rollSelect(label, attributes, choices) {
+  return `<label><span class="field-label">${label}</span><select ${attributes} data-roll-select>${choices}</select></label>`;
+}
+
 function numberOptions(first, last, selected, label = value => value) {
   return Array.from({length: last - first + 1}, (_, i) => {
     const value = first + i;
@@ -864,28 +874,23 @@ function dicePoolControls({count, sides, modifier}, damage = false) {
   const savedSide = damage && !diceSides.includes(sides)
     ? `<option value="${sides}" selected disabled hidden>d${sides} (preset)</option>` : '';
   return `<div class="dice-controls">
-    <label><span class="field-label">Dice</span><select ${controls[0]}>${diceRange(1, diceCountMax, count)}</select></label>
-    <label><span class="field-label">Sides</span><select ${controls[1]}>
-      ${savedSide}${diceSides.map(value => diceOption(value, sides, `d${value}`)).join('')}
-    </select></label>
-    <label><span class="field-label">Bonus</span><select ${controls[2]}>${diceRange(diceBonusMin, diceBonusMax, modifier, fmtSign)}</select></label>
+    ${rollSelect('Dice', controls[0], diceRange(1, diceCountMax, count))}
+    ${rollSelect('Sides', controls[1], savedSide + diceSides.map(value => diceOption(value, sides, `d${value}`)).join(''))}
+    ${rollSelect('Bonus', controls[2], diceRange(diceBonusMin, diceBonusMax, modifier, fmtSign))}
   </div>`;
 }
 
 function magnitudeSelect(attributes, selected, undecided = '') {
   const saved = Number(selected);
-  const options = numberOptions(0, 5, selected);
-  return `<label><span class="field-label">Spell magnitude</span><select ${attributes}>
-    ${diceOption(undecided, selected, 'GM to decide')}${options}
-    ${Number.isInteger(saved) && saved > 5 ? diceOption(saved, selected) : ''}
-  </select></label>`;
+  const options = diceOption(undecided, selected, 'GM to decide') + numberOptions(0, 5, selected)
+    + (Number.isInteger(saved) && saved > 5 ? diceOption(saved, selected) : '');
+  return rollSelect('Spell magnitude', attributes, options);
 }
 
 function rollModifierSelect(attributes, selected = 'normal') {
-  return `<label><span class="field-label">Roll modifier</span><select ${attributes}>
-    ${[['normal', 'Normal'], ['advantage', 'Advantage'], ['disadvantage', 'Disadvantage']]
-      .map(([value, label]) => diceOption(value, selected, label)).join('')}
-  </select></label>`;
+  const options = [['normal', 'Normal'], ['advantage', 'Advantage'], ['disadvantage', 'Disadvantage']]
+    .map(([value, label]) => diceOption(value, selected, label)).join('');
+  return rollSelect('Roll modifier', attributes, options);
 }
 
 function damageDiceControls(name, value = '', optional = '') {
@@ -941,11 +946,11 @@ function playDamageCard(c) {
     playDamage = {};
   }
   const values = {formula: preset?.formula, ...playDamage};
+  const options = diceOption('', playDamagePreset, 'Choose dice manually') + groups.filter(([, entries]) => entries.length)
+    .map(([label, entries]) => `<optgroup label="${label}">${entries.map(entry =>
+      diceOption(entry.id, playDamagePreset, `${entry.name} · ${entry.formula}`)).join('')}</optgroup>`).join('');
   return infoCard('Damage roll', `<div class="block-stack">
-    <label><span class="field-label">Damage preset</span><select id="play-damage-preset"><option value="">Choose dice manually</option>
-      ${groups.filter(([, entries]) => entries.length).map(([label, entries]) => `<optgroup label="${label}">${entries.map(entry =>
-        diceOption(entry.id, playDamagePreset, `${entry.name} · ${entry.formula}`)).join('')}</optgroup>`).join('')}
-    </select></label>${damageRoller('play-damage-form', values)}</div>`);
+    ${rollSelect('Damage preset', 'id="play-damage-preset"', options)}${damageRoller('play-damage-form', values)}</div>`);
 }
 
 const referenceTabs = ['All', 'Core moves', 'Classes', 'Paths', 'Equipment', 'Keywords', 'Struggles', 'GM'];
@@ -1482,7 +1487,7 @@ function renderDamageResult(result) {
 function damageRoller(id, {formula = '', mode = 'normal', result = null} = {}, spellId = '') {
   return `<form id="${id}" class="damage-roller" data-damage-form data-spell-id="${esc(spellId || '')}">
     ${damageDiceControls('formula', formula)}
-    <label><span class="field-label">Damage roll</span><select name="mode">${damageModes.map(([value,label])=>`<option value="${value}" ${mode === value ? 'selected' : ''}>${label}</option>`).join('')}</select></label>
+    ${rollSelect('Damage roll', 'name="mode"', damageModes.map(([value, label]) => diceOption(value, mode, label)).join(''))}
     <button class="btn primary" type="submit">${ico('dice')} Roll damage</button>
     <div id="${id}-result" class="quick-dice-result damage-result" role="status">${renderDamageResult(result)}</div></form>`;
 }
@@ -1805,7 +1810,22 @@ if(a.form?.id==='play-damage-form' && a.name==='mode'){
   playDamage = {...playDamage, mode: a.value, result: null};
   document.getElementById('play-damage-form-result').textContent = '';
 }
-if(a.matches('[data-hide-unavailable]')){hideUnavailable=a.checked;refreshSpellLists();}if(a.form?.id==='spell-cast-form')updateSpellCast(a.form);if(a.matches('[data-bind]')){changeBind(a.dataset.bind,a.value);refreshAfterChange(a.dataset.bind)}if(a.matches('[data-school]')){const c=current(),s=a.dataset.school;if(a.checked){if(c.prepared.length>=3){toast('Maximum three normal Prepared Schools. Owned Paths grant their schools separately.');render();return}c.prepared.push(s);}else c.prepared=c.prepared.filter(x=>x!==s);save();render();}if(a.id==='dice-mag'){diceMag=a.value;diceLast=null;render();}if(a.id==='dice-extra'){diceExtra=a.value;diceLast=null;render();}});
+if(a.matches('[data-hide-unavailable]')){hideUnavailable=a.checked;refreshSpellLists();}
+if(a.form?.id==='spell-cast-form')updateSpellCast(a.form);
+if (a.matches('[data-bind]')) {
+  changeBind(a.dataset.bind, a.value);
+  refreshAfterChange(a.dataset.bind);
+  if (a.dataset.bind === '__diceMode') document.querySelector('[data-bind="__diceMode"]')?.focus({preventScroll: true});
+}
+if(a.matches('[data-school]')){const c=current(),s=a.dataset.school;if(a.checked){if(c.prepared.length>=3){toast('Maximum three normal Prepared Schools. Owned Paths grant their schools separately.');render();return}c.prepared.push(s);}else c.prepared=c.prepared.filter(x=>x!==s);save();render();}
+if (a.id === 'dice-mag' || a.id === 'dice-extra') {
+  if (a.id === 'dice-mag') diceMag = a.value;
+  else diceExtra = a.value;
+  diceLast = null;
+  render();
+  document.getElementById(a.id).focus?.({preventScroll: true});
+}
+});
 document.addEventListener('input', e => {
   const input = e.target;
   if(input.matches('[data-rules-search]')){rulesSearch=input.value;document.getElementById('rules-results').innerHTML=rulesResults();}
@@ -1871,7 +1891,9 @@ if(e.target.id === 'character-record-form') {
 if(e.target.id==='spell-form'){e.preventDefault();const f=e.target,form=new FormData(f),c=current(),id=f.dataset.id;const damageRaw=String(form.get('damage') ?? '').trim();const damage=parseDamageFormula(damageRaw);if(damageRaw&&!damage){toast('Enter damage dice like 1d6 or 2d8+1.');return;}const sp={id:id||uid(),...(damage?{damage:damage.formula}:{}),name:String(form.get('name')).trim().slice(0,110),verb:String(form.get('verb')),sub:String(form.get('sub')),category:spellCategory({category:form.get('category')}),mag:String(form.get('mag')),effect:String(form.get('effect')).trim().slice(0,2000),note:String(form.get('note')).trim().slice(0,2000),example:false};if(!sp.name||!sp.effect){toast('Enter a spell name and desired effect.');return;}const i=c.spells.findIndex(x=>x.id===id);if(i>=0)c.spells[i]=sp;else c.spells.unshift(sp);save();closeModal();render();toast('Spell saved.');}else if(e.target.id==='relationship-form'){e.preventDefault();const f=e.target,d=new FormData(f),r={name:String(d.get('name')).slice(0,100),description:String(d.get('description')).slice(0,800),depth:Number(d.get('depth'))};let i=f.dataset.index===''?-1:Number(f.dataset.index);if(i<0)current().relationships.push(r);else current().relationships[i]=r;save();closeModal();render();}else if(e.target.id==='new-character-form'){e.preventDefault();const c=createCharacter(new FormData(e.target));db.characters.push(c);db.activeId=c.id;resetCharacterTools();screen='sheet';save();closeModal();render();toast('New character created.');}});
 document.getElementById('import-file').addEventListener('change',e=>{handleImport(e.target.files?.[0]);e.target.value='';});
 document.getElementById('modal-scrim').addEventListener('click',e=>{if(e.target.id==='modal-scrim')closeModal()});
-document.addEventListener('keydown',e=>{if(e.key==='Escape')closeModal()});
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape' && !e.defaultPrevented && !document.querySelector('select[data-roll-select]:is(:open)')) closeModal();
+});
 // Initial data and offline registration
 window.addEventListener('pagehide', () => { if (saveTimer) save(); });
 document.addEventListener('visibilitychange', () => { if (document.hidden && saveTimer) save(); });
