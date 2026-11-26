@@ -263,7 +263,6 @@ function render() {
   const pages = {alwyn: renderAlwyn, sheet: renderSheet, magic: renderMagic, paths: renderClassPaths, play: renderPlay, notes: renderNotes, equipment:renderEquipment, rules:renderRules, characters:renderCharacterLibrary, saves:renderSaves};
   target.innerHTML = (root.alwyn ? renderAgeNav() : '') + pages[screen]();
 }
-const pagehead=(title,desc,actions='')=>`<div class="pagehead"><div><div class="eyebrow">DW2 BETA V3 · ${esc(current().className || 'Wizard')}</div><h1>${title}</h1><p>${desc}</p></div>${actions}</div>`;
 const field=(label,path,v,placeholder='',type='text')=>`<label class="input-wrap"><span class="field-label">${label}</span><input class="input" data-bind="${path}" type="${type}" placeholder="${esc(placeholder)}" value="${esc(v)}" ${type==='number'?'step="1"':''}/></label>`;
 const select=(label,path,val,options)=>`<label class="input-wrap"><span class="field-label">${label}</span><select data-bind="${path}">${options.map(o=>{const value=typeof o==='object'?o.id:o,label=typeof o==='object'?o.name:o;return `<option value="${esc(value)}" ${val===value?'selected':''}>${esc(label)}</option>`}).join('')}</select></label>`;
 const pill=(label,type='')=>`<span class="pill ${type}">${esc(label)}</span>`;
@@ -302,10 +301,7 @@ function chooseAlwynAge(id, mobile = false) {
 function renderAlwyn() {
   const root = currentCharacter();
   const {alwyn} = root;
-  return pagehead(esc(characterName(root)), 'The Fractured Archmage',
-    `<div class="flex-row overview-actions"><button class="btn" data-action="nav" data-screen="notes">${ico('book')} Campaign journal</button>
-      <button class="btn" data-action="alwyn-edit">${ico('edit')} Edit profile</button></div>`)
-    + `<section class="card age-overview">
+  return `<section class="card age-overview">
       ${alwyn.overview ? `<p class="age-summary">${esc(alwyn.overview)}</p>` : ''}
       <dl class="age-resources" aria-label="Shared resources">
         <div><dt>Level</dt><dd>${esc(root.level)}</dd></div>
@@ -313,6 +309,11 @@ function renderAlwyn() {
         <div><dt>XP</dt><dd>${esc(root.xp)} / 5</dd></div>
         <div><dt>${esc(activeAge().name)} Conditions</dt><dd>${conditionCount(current()) || 'Clear'}</dd></div>
       </dl>
+      <div class="flex-row overview-actions">
+        <button class="btn" data-action="alwyn-edit">${ico('edit')} Edit profile</button>
+        <button class="btn" data-action="nav" data-screen="equipment">Equipment</button>
+        <button class="btn" data-action="nav" data-screen="notes">${ico('book')} Campaign journal</button>
+      </div>
     </section>
     ${morningRollCard(alwyn.morningRoll)}
     <section aria-labelledby="ages-title">
@@ -337,8 +338,7 @@ function renderAlwyn() {
       return `<details class="reference-entry"><summary><strong>${age.name}</strong></summary>
         ${entries.length ? entries.map(([key, label]) => `<h3>${label}</h3><p class="age-summary">${esc(story[key])}</p>`).join('') : '<p class="muted">No backstory recorded.</p>'}
       </details>`;
-    }).join('')}</div>`)}
-    <div class="flex-row overview-actions"><button class="btn" data-action="nav" data-screen="equipment">Equipment</button><button class="btn" data-action="nav" data-screen="notes">Campaign journal</button></div>`;
+    }).join('')}</div>`)}`;
 }
 
 function morningRollCard(value) {
@@ -620,7 +620,7 @@ function migrateInventory(character) {
     typeof record?.id === 'string' && record.id ? record.id : 'inventory-' + index)).filter(Boolean);
 }
 
-function renderSheet(){const c=current(),mx=maxHp(c),count=conditionCount(c),stats=CONDITIONS.reduce((a,x)=>(a[x.stat]=x.name,a),{});return pagehead(c.alwyn ? activeAge().name : 'Your character',c.alwyn ? esc(characterName(currentCharacter())) + ' · Age ' + activeAge().years : 'Your central character sheet. Changes save automatically on this device.',`<button class="btn hide-mobile" data-action="print">${ico('printer')} Print</button>`)+
+function renderSheet(){const c=current(),mx=maxHp(c),count=conditionCount(c),stats=CONDITIONS.reduce((a,x)=>(a[x.stat]=x.name,a),{});return `<div class="page-actions hide-mobile"><button class="btn" data-action="print">${ico('printer')} Print</button></div>` +
 `<section class="card hero"><div class="hero-inner"><div class="hero-top"><button class="avatar" data-action="portrait" title="Change character portrait" aria-label="Change character portrait">${c.origins.portrait?`<img src="${esc(c.origins.portrait)}" alt="Character portrait" style="width:100%;height:100%;border-radius:inherit;object-fit:cover"/>`:'✦'}</button><div><h2 class="hero-name">${esc(c.name||'Unnamed Wizard')}</h2><div class="hero-meta">${pill(`Level ${c.level} ${c.className || 'Wizard'}`,'accent')}${c.paths.length?c.paths.map(p=>pill(p,'mint')).join(''):pill('No Path acquired')}${pill(`${armor(c)} Armor`)}</div></div></div><div class="hero-controls">${field('Character name','name',c.name,'Your Wizard')}${field('Pronouns','pronouns',c.pronouns,'they/them')}${field('Player name','player',c.player,'Optional')}</div>${c.level<2&&c.paths.length?'<div class="hero-sub">Rules check: Wizard Paths are normally gained through advancements after level 1.</div>':''}</div></section>`+
 `<div class="cols-2" style="margin-top:18px"><div class="block-stack">
 ${ageRoleplay()}${!c.alwyn ? backstoryCard(c) : ''}${CLASS_RULES[c.className || 'Wizard'] ? infoCard(CLASS_RULES[c.className || 'Wizard'].startingMove || 'Starting move', '<p class="para">' + esc(CLASS_RULES[c.className || 'Wizard'].startingDescription) + '</p>') : ''}
@@ -701,17 +701,14 @@ document.addEventListener('touchend', event => {
   selectWorkspaceSection(next);
 }, {passive: false});
 
-function renderMagic(){const c=current();return `<div class="workspace-intro">` + pagehead('Shape the impossible','Create custom spells from prepared-school verbs and substances. Your concepts save to your spellbook.',`<button class="btn primary" data-action="spell-new">${ico('plus')} New spell</button>`) + `</div>` + workspaceNav('magic') + `<div class="cols-2 magic-layout">${workspacePanel('magic', 'schools', `${infoCard('Prepared schools',`<div class="flex-spread" style="margin-bottom:13px"><span class="small muted">Choose up to 3 standard schools. Your owned Paths add bonus prepared schools.</span>${pill(`${c.prepared.length}/3 normal`,'accent')}</div><div class="group-list">${SCHOOLS.map(s=>schoolBlock(s,c)).join('')}</div><div class="flex-row" style="margin-top:13px"><button class="btn tiny" data-action="make-camp">${ico('refresh')} Make Camp</button><span class="micro muted">Changing schools normally happens when you Make Camp.</span></div>`)}
+function renderMagic(){const c=current();return workspaceNav('magic') + `<div class="cols-2 magic-layout">${workspacePanel('magic', 'schools', `${infoCard('Prepared schools',`<div class="flex-spread" style="margin-bottom:13px"><span class="small muted">Choose up to 3 standard schools. Your owned Paths add bonus prepared schools.</span>${pill(`${c.prepared.length}/3 normal`,'accent')}</div><div class="group-list">${SCHOOLS.map(s=>schoolBlock(s,c)).join('')}</div><div class="flex-row" style="margin-top:13px"><button class="btn tiny" data-action="make-camp">${ico('refresh')} Make Camp</button><span class="micro muted">Changing schools normally happens when you Make Camp.</span></div>`)}
 ${infoCard('Available combinations',`<div class="cols-3" style="grid-template-columns:repeat(3,1fr);gap:9px"><div class="stat" style="padding:13px 4px"><div class="stat-name">Verbs</div><div class="stat-value">${availableVerbs(c).length}</div></div><div class="stat" style="padding:13px 4px"><div class="stat-name">Substances</div><div class="stat-value">${availableSubs(c).length}</div></div><div class="stat" style="padding:13px 4px"><div class="stat-name">Pairings</div><div class="stat-value">${availableVerbs(c).length*availableSubs(c).length}</div></div></div><div class="separator"></div><p class="small muted">All pairings are concepts, not automatically permitted spells. The GM approves feasibility, range, duration, and Magnitude.</p><button class="btn btn-wide" data-action="spell-new">${ico('sparkles')} Open spell builder</button>`)}
 `)}${workspacePanel('magic', 'spells', `<section class="card spellbook-panel">
   <div class="card-title spellbook-header"><h2>Spellbook</h2>
     <button class="btn tiny workspace-desktop" data-action="spell-library" aria-haspopup="dialog">Expand spellbook</button>
-    <button class="btn primary mobile-workspace" data-action="spell-new">${ico('plus')} New spell</button></div>
+    <button class="btn primary" data-action="spell-new">${ico('plus')} New spell</button></div>
   <div class="spellbook-scroll" tabindex="0" role="region" aria-label="Saved spells">${renderSpellList(c)}</div>
 </section>`)}</div>`;}
-function renderPaths(){const c=current();return pagehead('Path of the arcane','Acquire Paths, unlock verbs, and track individual Path Moves as you level up.')+`<div class="cols-2"><div class="block-stack">${infoCard('Your advancement plan',`<div class="flex-spread"><div><div class="field-label">Current level</div><div class="meter-value">${c.level}</div></div>${pill(`${c.paths.length} Paths owned`,'accent')}</div><div class="separator"></div><p class="small muted">Gaining a Path grants only its Starting Move. Other Path Moves require separate advancements. Your first Path is normally gained by leveling up from level 1.</p><label class="field-label" for="advances">Advancement history / choices</label><textarea id="advances" data-bind="advancementNotes" placeholder="Level 2 — Illusionist Path\nLevel 3 — Mirror Image…">${esc(c.advancementNotes||'')}</textarea>`)}
-${infoCard('Spellcasting rules',`<p class="small muted">Prepare 3 schools. An owned Path’s school can be prepared in addition to the normal three. Cast a Spell uses +INT and the GM sets the spell’s Magnitude.</p><div class="group-list"><div class="group-item"><span>MAG below INT</span>${pill('Normal roll','mint')}</div><div class="group-item"><span>MAG equal to INT</span>${pill('Disadvantage','amber')}</div><div class="group-item"><span>MAG above INT</span>${pill('Too powerful','danger')}</div></div><div class="separator"></div><p class="footnote">For a 7–9, your Wizard may mark a Condition, accept a GM twist, or forget a prepared school until Make Camp. Casting requires your focus, both hands otherwise free, and the ability to speak aloud.</p>`)}
-</div><div class="block-stack">${PATHS.map(p=>`<section class="path-panel"><div class="path-panel-head"><div><h3>${p.id}</h3><div class="small muted">${esc(p.tag)}</div></div><button class="btn ${hasPath(c,p.id)?'primary':''}" data-action="path" data-path="${p.id}">${hasPath(c,p.id)?ico('check')+' Acquired':'Acquire'}</button></div><div class="separator"></div><div class="pillbar">${pill(p.school,'accent')}${p.extra.map(s=>pill(s)).join('')}</div><p class="small muted" style="margin-top:12px"><strong style="color:var(--text)">${esc(p.starting)}:</strong> ${esc(p.startingDesc)}</p><div style="margin-top:17px"><div class="field-label">Path Moves — gained separately</div>${p.moves.map(m=>`<div class="path-move"><div class="path-move-head"><strong>${esc(m.id)}</strong><button class="btn tiny ${c.moves.includes(m.id)?'primary':''}" data-action="move" data-move="${esc(m.id)}" data-path="${p.id}" ${!hasPath(c,p.id)?'disabled':''}>${c.moves.includes(m.id)?'Learned':'Learn'}</button></div><p>${esc(m.desc)}</p></div>`).join('')}</div></section>`).join('')}</div></div>`;}
 const playRollTypes = [
   ...attributes.map(stat => ({id: stat.toLowerCase(), name: stat, stat})),
   {id: 'cast', name: 'Cast a Spell'},
@@ -741,7 +738,6 @@ function playRollCard() {
 
 function renderPlay() {
   return `<div class="play-workspace">
-    <div class="workspace-intro">${pagehead('At the table', 'Roll for moves and damage.')}</div>
     <div class="play-layout">
       ${workspacePanel('play', 'roll', playRollCard())}
       ${workspacePanel('play', 'damage', playDamageCard(current()))}
@@ -960,8 +956,7 @@ function renderRules() {
   const families = rulesCategory === 'Equipment' ? equipmentFamilies
     : rulesCategory === 'Paths' ? Object.keys(CLASS_RULES) : [];
   const familyLabel = rulesCategory === 'Equipment' ? 'Equipment type' : 'Path class';
-  return pagehead('Rules & reference', 'Dungeon World 2 Beta v3 by Helena Real and Spencer Moore.') +
-    `<section class="card rules-page">
+  return `<section class="card rules-page">
       <div class="rules-controls">
         <label><span class="field-label">Search reference</span><input class="input" type="search" data-rules-search value="${esc(rulesSearch)}" placeholder="Move, Path, item, keyword, or Struggle"></label>
         <nav class="tabset rules-tabs" aria-label="Reference categories">${referenceTabs.map(category =>
@@ -1203,8 +1198,7 @@ function renderClassPaths() {
   const c = current();
   const ownClass = c.className || 'Wizard';
   const paths = Object.values(CLASS_RULES).flatMap(rule => rule.paths.map(path => ({...path, className:rule.name, key:rule.name === 'Wizard' ? path.name : rule.name + '::' + path.id})));
-  return pagehead('Paths & growth','Choose your class Paths or a multiclass Path, then learn its moves separately.') +
-    infoCard('Advancement plan', `<p class="small muted">Level ${c.level} · ${esc(ownClass)}. Choose Paths through level-up advancements or GM approval.</p><p><button class="btn tiny" data-action="reference-open" data-id="class-${esc(ownClass.toLowerCase())}" data-jump="advancements" aria-haspopup="dialog">Advancement choices</button></p><label><span class="field-label">Advancement history / choices</span><textarea data-bind="advancementNotes">${esc(c.advancementNotes || '')}</textarea></label>`) +
+  return infoCard('Advancement plan', `<p class="small muted">Level ${c.level} · ${esc(ownClass)}. Choose Paths through level-up advancements or GM approval.</p><p><button class="btn tiny" data-action="reference-open" data-id="class-${esc(ownClass.toLowerCase())}" data-jump="advancements" aria-haspopup="dialog">Advancement choices</button></p><label><span class="field-label">Advancement history / choices</span><textarea data-bind="advancementNotes">${esc(c.advancementNotes || '')}</textarea></label>`) +
     `<div class="tabset path-filters">${['All', ...Object.keys(CLASS_RULES)].map(name => `<button class="tab ${pathClassFilter === name ? 'active' : ''}" data-action="path-class" data-class="${name}">${name}</button>`).join('')}</div><div class="reference-grid">${paths.filter(path => pathClassFilter === 'All' || path.className === pathClassFilter).map(path => {
       const owned = c.paths.includes(path.key);
       const wizard = path.className === 'Wizard' ? PATHS.find(entry => entry.id === path.name) : null;
@@ -1244,7 +1238,7 @@ function classPathToggle(key) {
 }
 
 function renderCharacterLibrary() {
-  return pagehead('Character library','Your saved characters and Alwyn’s three age sheets.',`<button class="btn primary" data-action="character-new">${ico('plus')} New character</button>`) +
+  return `<div class="page-actions"><button class="btn primary" data-action="character-new">${ico('plus')} New character</button></div>` +
     `<div class="reference-grid">${db.characters.map(character => `<article class="card ${character.id === db.activeId ? 'current-character' : ''}"><h2>${esc(characterName(character))}</h2><p class="small muted">Level ${character.level} · ${esc(character.className || 'Wizard')}${character.alwyn ? ' · Three ages' : ''}</p><div class="pillbar">${character.paths.map(path => pill(classPathByKey(path)?.name || path)).join('')}</div><div class="flex-row" style="margin-top:18px"><button class="btn primary" data-action="character-switch" data-id="${esc(character.id)}">${character.id === db.activeId ? 'Open current' : 'Open character'}</button>${character.id === db.activeId ? `<button class="btn" data-action="character-duplicate">Duplicate</button><button class="btn danger" data-action="character-delete">Delete</button>${!character.alwyn && /\balwyn\b/i.test(character.name) ? '<button class="btn" data-action="alwyn-edit">Set up Alwyn’s three ages</button>' : ''}` : ''}</div></article>`).join('')}</div>`;
 }
 
@@ -1322,16 +1316,15 @@ function renderNotes() {
   const journal = () => recordCard(c, 'journalEntries') + (c.alwyn && c.notes
     ? infoCard('Earlier notes for this age', '<textarea aria-label="Earlier notes" data-bind="notes">'+esc(c.notes)+'</textarea>') : '');
   const panels = {journal, struggle: () => journalStruggle(c), relationships: () => infoCard('Relationships',`<p class="para small">Record PCs, relationship descriptions, and Depth (0–3).</p><div class="group-list">${c.relationships.length?c.relationships.map((rel,i)=>`<div class="group-item"><div style="flex:1"><strong>${esc(rel.name)}</strong><div class="micro muted">${esc(rel.description)}</div><div class="micro muted">Depth: ${clamp(rel.depth||0,0,3)}</div></div><button class="icon-btn" data-action="relationship-edit" data-index="${i}" aria-label="Edit relationship">${ico('edit')}</button></div>`).join(''):'<div class="empty">No relationships yet</div>'}</div><button class="btn" style="margin-top:13px" data-action="relationship-new">${ico('plus')} Add relationship</button>`)};
-  return pagehead('Campaign journal', 'Session notes, your Struggle, and relationships.') + workspaceNav('notes')
+  return workspaceNav('notes')
     + '<div class="journal-layout">' + workspacePanel('notes', section, panels[section]()) + '</div>';
 }
 function renderEquipment() {
-  const c = current();
-  return pagehead('Equipment & inventory', c.alwyn ? 'Shared inventory for all three ages.' : 'Manage what you carry and equip.') + recordCard(c, 'inventory');
+  return recordCard(current(), 'inventory');
 }
-function renderSaves(){const c=current();return pagehead('App & saves','Drive sync, backups, and appearance.')+`<div class="cols-2"><div class="block-stack">${driveSync?.configured ? infoCard('Google Drive', `<div class="group-list"><p class="para small">Sync your characters in the Drive folder you choose. <a href="./privacy.html" target="_blank" rel="noopener">Privacy</a></p><p id="drive-status" class="para small" role="status">${esc(driveSync.status())}</p><button id="drive-button" class="btn btn-wide" data-action="drive-sync" ${driveSync.disabled()?'disabled':''}>${esc(driveSync.button())}</button><div id="drive-disconnect-row" ${db.drive?'':'hidden'}><button id="drive-disconnect" class="btn btn-wide" data-action="drive-disconnect" ${driveSync.disabled()?'disabled':''}>Disconnect this device</button></div></div>`) : ''}
+function renderSaves(){const c=current();return `<div class="cols-2"><div class="block-stack">${driveSync?.configured ? infoCard('Google Drive', `<div class="group-list"><p class="para small">Sync your characters in the Drive folder you choose. <a href="./privacy.html" target="_blank" rel="noopener">Privacy</a></p><p id="drive-status" class="para small" role="status">${esc(driveSync.status())}</p><button id="drive-button" class="btn btn-wide" data-action="drive-sync" ${driveSync.disabled()?'disabled':''}>${esc(driveSync.button())}</button><div id="drive-disconnect-row" ${db.drive?'':'hidden'}><button id="drive-disconnect" class="btn btn-wide" data-action="drive-disconnect" ${driveSync.disabled()?'disabled':''}>Disconnect this device</button></div></div>`) : ''}
 ${infoCard('Export & restore',`<div class="alert info" style="margin-bottom:17px">Your edits are saved automatically <strong>in this browser</strong>. Export a backup to keep a separate copy or move your characters to another device.</div><div class="group-list"><button class="btn btn-wide primary" data-action="export">${ico('download')} Export ALL characters · JSON</button><button class="btn btn-wide" data-action="import">${ico('upload')} Import a JSON backup</button><button class="btn btn-wide" data-action="export-character">${ico('download')} Export current character only</button><button class="btn btn-wide" data-action="print">${ico('printer')} Print character sheet</button></div><p class="footnote" style="margin-top:14px">Import adds characters from a saved backup without overwriting existing ones. Backups include stats, notes, spells, and portrait data. Keep a copy somewhere you control (e.g., Files, Google Drive, or another cloud folder).</p>`)}
-</div><div class="block-stack">${infoCard('App information',`<div class="group-list"><div class="group-item"><span>Theme</span><button class="btn tiny" data-action="theme">${db.theme==='dark'?'Dark':'Light'} · change</button></div><div class="group-item"><span>Rule source</span>${pill('Dungeon World 2 Beta v3')}</div><div class="group-item"><span>Storage</span>${pill(volatile?'Needs backup':'Local browser','accent')}</div></div><p class="footnote" style="margin-top:13px">Built from your DW2 Beta v3 Character Keeper export. This is an unofficial character tool. Spell examples are proposals requiring GM approval. For offline phone installation, use the hosted PWA version over HTTPS; a downloaded local HTML file may have different browser storage behavior.</p>`)}
+</div><div class="block-stack">${infoCard('App information',`<div class="group-list"><div class="group-item"><span>Theme</span><button class="btn tiny" data-action="theme">${db.theme==='dark'?'Dark':'Light'} · change</button></div><div class="group-item"><span>Rule source</span>${pill('Dungeon World 2 Beta v3')}</div><div class="group-item"><span>Storage</span>${pill(volatile?'Needs backup':'Local browser','accent')}</div></div><p class="footnote" style="margin-top:13px">Built from your DW2 Beta v3 Character Keeper export. Game rules by Helena Real and Spencer Moore. This is an unofficial character tool. Spell examples are proposals requiring GM approval. For offline phone installation, use the hosted PWA version over HTTPS; a downloaded local HTML file may have different browser storage behavior.</p>`)}
 </div></div>`;}
 function modal(title, content, view = '') {
   const dialog = document.getElementById('modal');

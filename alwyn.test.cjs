@@ -552,9 +552,14 @@ test('navigation keeps Play tools second and Equipment directly available on mob
   assert.ok(desktop.indexOf('data-screen="equipment"')<desktop.indexOf('data-screen="paths"'));
   const mobile=app.element('nav-mobile').innerHTML;
   assert.deepEqual([...mobile.matchAll(/data-screen="([^"]+)"/g)].map(match=>match[1]),['sheet','play','magic','equipment']);
-  for(const screen of ['sheet','play','magic','paths','equipment','notes','rules','characters','saves']){
+  const pages = {sheet:'Character sheet', play:'Play tools', magic:'Spellbook', paths:'Paths & growth',
+    equipment:'Equipment & inventory', notes:'Campaign journal', rules:'Rules & reference',
+    characters:'Character library', saves:'App & saves'};
+  for(const [screen, title] of Object.entries(pages)){
     app.click('nav',{screen});
-    assert.ok(app.screen().includes('pagehead'),screen);
+    assert.equal(app.element('page-title').textContent, title);
+    assert.match(app.screen(), /class="card\b/, screen);
+    assert.doesNotMatch(app.screen(), /class="(?:pagehead|eyebrow|workspace-intro)"/, screen);
     const stack=[];
     for(const match of app.screen().matchAll(/<(\/?)([a-z][a-z0-9-]*)\b[^>]*>/gi)){
       const tag=match[2].toLowerCase();
