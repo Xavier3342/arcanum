@@ -523,10 +523,13 @@ test('Alwyn receives the replacement needles once even if a device had no legacy
   assert.equal(getNeedles(openApp(app.state()).state()).length, 0);
 });
 
-test('all navigation pages render, Play tools comes second, and quick dice opens from any page', () => {
+test('navigation keeps Play tools second and Equipment directly available on mobile', () => {
   const app=openApp();
   const desktop=app.element('nav-desktop').innerHTML;
   assert.ok(desktop.indexOf('data-screen="play"')<desktop.indexOf('data-screen="magic"'));
+  assert.ok(desktop.indexOf('data-screen="equipment"')<desktop.indexOf('data-screen="paths"'));
+  const mobile=app.element('nav-mobile').innerHTML;
+  assert.deepEqual([...mobile.matchAll(/data-screen="([^"]+)"/g)].map(match=>match[1]),['sheet','play','magic','equipment']);
   for(const screen of ['sheet','play','magic','paths','equipment','notes','rules','characters','saves']){
     app.click('nav',{screen});
     assert.ok(app.screen().includes('pagehead'),screen);
@@ -546,7 +549,7 @@ test('all navigation pages render, Play tools comes second, and quick dice opens
   assert.doesNotMatch(app.screen(),/id="quick-dice-form"/);
   assert.match(app.screen(),/spellbook-scroll/);
   app.click('more-nav');
-  assert.match(app.element('modal-content').innerHTML,/data-screen="equipment"/);
+  assert.match(app.element('modal-content').innerHTML,/data-screen="paths"/);
 });
 
 test('rules reference searches every class and characters can acquire and retain multiclass Paths', () => {
