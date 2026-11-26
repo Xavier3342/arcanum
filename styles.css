@@ -87,7 +87,28 @@
 .reference-entry summary { cursor: pointer; }
 .reference-entry summary span { display: block; margin-top: 5px; }
 .reference-entry p { margin: 12px 0 0; }
-.rules-search { display: block; margin-top: 20px; }
+.rules-controls { display: grid; gap: 12px; grid-template-columns: minmax(0, 2fr) minmax(10rem, 1fr); margin-top: 18px; }
+.rules-search { display: block; }
+.rules-search:only-child { grid-column: 1 / -1; }
+.rules-tabs .tab { min-height: 44px; }
+.reference-open { display: flex; justify-content: space-between; align-items: center; gap: 12px; width: 100%; min-height: 44px; text-align: left; color: var(--text); }
+.reference-open:hover { border-color: var(--accent); }
+.reference-open small { display: block; margin-top: 3px; }
+.reference-open svg { flex: 0 0 auto; }
+.reference-dialog { display: grid; gap: 14px; }
+.reference-body p, .reference-dialog > p { margin: 0; }
+.reference-body { display: grid; gap: 10px; overflow-wrap: anywhere; }
+.reference-body h3 { font-size: 1rem; margin: 0 0 5px; }
+.reference-outcome { padding: 10px 12px; border-left: 3px solid var(--line); border-radius: 8px; background: var(--surface-2); }
+.reference-outcome.hit { border-color: var(--mint); }
+.reference-outcome.partial { border-color: var(--amber); }
+.reference-outcome.miss { border-color: var(--danger); }
+.reference-notes { padding-top: 12px; border-top: 1px solid var(--line); }
+@media (max-width: 720px) {
+  .rules-controls { grid-template-columns: 1fr; }
+  .rules-controls input, .rules-controls select { font-size: 16px; }
+  .reference-open { padding: 10px 12px; }
+}
 .path-filters { margin: 18px 0; }
 .current-character { border-color: var(--accent); }
 .dice-builder { border: 0; padding: 0; margin: 0; min-width: 0; }

@@ -2,6 +2,8 @@
 (()=>{'use strict';
 const STORAGE='arcanum_dw2_v3_v1';
 const REFERENCE = window.ARCANUM_RULES || {};
+const tableReference = window.ARCANUM_REFERENCE || [];
+const referenceById = new Map(tableReference.map(entry => [entry.id, entry]));
 const CLASS_RULES = REFERENCE.RULES || {Wizard:{name:'Wizard',hp:6,startingDescription:'Prepare three schools and weave the arcane.',paths:[]}};
 const SCHOOLS=[
 {id:'Abjuration',sub:'Magic itself',verbs:['Temporarily disable','Protect from'],desc:'Wards, suppression and protection'},
@@ -112,7 +114,7 @@ let castTrigger;
 let libraryTrigger;
 let libraryReturn;
 let hideUnavailable = false;
-let playDamage = {}, playDamagePreset = '', rulesCategory = 'All', rulesSearch = '', pathClassFilter = 'All';
+let playDamage = {}, playDamagePreset = '', rulesCategory = 'Core moves', rulesSearch = '', pathClassFilter = 'All';
 const spellCategories = ['Defense', 'Mobility', 'Control', 'Attack', 'Utility', 'Other'];
 const diceSides = [3, 4, 6, 8, 10, 12, 20];
 const currentCharacter=()=>db.characters.find(c=>c.id===db.activeId)||db.characters[0];
@@ -907,35 +909,149 @@ function playDamageCard(c) {
     </select></label>${damageRoller('play-damage-form', values)}</div>`);
 }
 
+const referenceTabs = ['All', 'Core moves', 'Classes', 'Paths', 'Equipment', 'Keywords', 'Struggles', 'GM'];
+const equipmentFamilies = ['Armor', 'Weapons', 'Gear', 'Starting gear', 'Magic items', 'Artifacts', 'Services'];
+let rulesFamily = 'All';
+
 function renderRules() {
-  return pagehead('Rules & reference', 'Search core moves, all nine classes, Paths, magic, equipment, and GM procedures.') +
-    `<section class="card"><p class="small muted">Dungeon World 2 Beta v3 reference summaries adapted from <a href="https://charlesblanche.github.io/Nocturne-Beta/" target="_blank" rel="noopener">Nocturne Beta by Charles Blanche</a>. Some Path excerpts are abbreviated; consult the rulebook page shown for full wording.</p>
-    <div class="tabset">${['All','Core moves','Classes','Paths','Magic','Equipment','GM'].map(category => `<button class="tab ${rulesCategory === category ? 'active' : ''}" data-action="rules-category" data-category="${category}">${category}</button>`).join('')}</div>
-    <label class="rules-search"><span class="field-label">Search reference</span><input class="input" data-rules-search value="${esc(rulesSearch)}" placeholder="Move, class, school, item, or rule"></label><div id="rules-results">${rulesResults()}</div></section>`;
+  const families = rulesCategory === 'Equipment' ? equipmentFamilies
+    : rulesCategory === 'Paths' ? Object.keys(CLASS_RULES) : [];
+  const familyLabel = rulesCategory === 'Equipment' ? 'Equipment type' : 'Path class';
+  return pagehead('Rules & reference', 'Dungeon World 2 Beta v3 by Helena Real and Spencer Moore.') +
+    `<section class="card rules-page">
+      <nav class="tabset rules-tabs" aria-label="Reference categories">${referenceTabs.map(category =>
+        `<button class="tab ${rulesCategory === category ? 'active' : ''}" aria-pressed="${rulesCategory === category}"
+          data-action="rules-category" data-category="${category}">${category}</button>`).join('')}</nav>
+      <div class="rules-controls">
+        <label class="rules-search"><span class="field-label">Search reference</span><input class="input" type="search" data-rules-search value="${esc(rulesSearch)}" placeholder="Move, Path, item, keyword, or Struggle"></label>
+        ${families.length ? `<label><span class="field-label">${familyLabel}</span><select id="rules-family">${opts(['All', ...families], rulesFamily)}</select></label>` : ''}
+      </div>
+      <div id="rules-results">${rulesResults()}</div>
+    </section>`;
 }
 
 function rulesResults() {
-  const entries = [], add = (category, name, detail, extra = '', page) => entries.push({category,name,detail,extra,page});
-  for (const move of REFERENCE.CORE_MOVES || []) {
-    const extra = REFERENCE.NR_COREDATA?.[move.name] || {};
-    add('Core moves',move.name,extra.trigger || move.hint,[extra.hit,extra.mixed,extra.miss,extra.tip].filter(Boolean).join('\n'));
-  }
-  for (const rule of Object.values(CLASS_RULES)) {
-    add('Classes',rule.name,`Base HP: ${rule.hp}. Starting Move: ${rule.startingMove}.`,rule.startingDescription);
-    for (const path of rule.paths) {
-      add('Paths',`${rule.name} · ${path.name}`,path.starter.name,path.starter.hint,path.starter.reference_page);
-      for (const move of path.moves) add('Paths',move.name,`${rule.name} · ${path.name}${move.roll ? ' · Roll +' + move.roll : ''}`,move.hint,move.reference_page);
-    }
-  }
-  for (const school of SCHOOLS) add('Magic',school.id,`Substance: ${school.sub}`,`Verbs: ${school.verbs.join(', ')}`);
-  for (const [name, detail] of Object.entries(REFERENCE.NR_GM_GUIDE || {})) add(['MAG','Spells'].includes(name) ? 'Magic' : 'GM',name,detail);
-  for (const condition of CONDITIONS) add('Core moves',condition.name,condition.desc,'Marked Conditions can recover normally. Locked Conditions require special recovery. Permanent Conditions are a campaign house rule.');
-  for (const item of REFERENCE.NR_CATALOG || []) add('Equipment',item.name,item.description || '',[item.damage ? 'Damage: ' + item.damage : '',item.armor ? 'Armor: ' + item.armor : '',item.tags?.join(' '),item.uses ? item.uses + ' uses' : ''].filter(Boolean).join(' · '));
-  for (const name of REFERENCE.NR_GM_MOVES || []) add('GM',name,'A way for the GM to change or complicate the fiction when a GM Move is called for.');
   const query = rulesSearch.toLowerCase().trim();
-  const matches = entries.filter(entry => (rulesCategory === 'All' || entry.category === rulesCategory) && Object.values(entry).join(' ').toLowerCase().includes(query));
-  return `<p class="small muted">${matches.length} matching entries</p><div class="reference-grid">${matches.map(entry => `<details class="reference-entry"><summary><strong>${esc(entry.name)}</strong><span class="small muted">${esc(entry.category)}${entry.page ? ' · Rulebook p. ' + entry.page : ''}</span></summary><p>${esc(entry.detail)}</p>${entry.extra ? `<p class="small muted record-details">${esc(entry.extra)}</p>` : ''}</details>`).join('') || '<div class="empty">No matching rules. Try another term.</div>'}</div>`;
+  const matches = tableReference.filter(entry =>
+    (rulesCategory === 'All' || entry.category === rulesCategory) &&
+    (rulesFamily === 'All' || entry.family === rulesFamily) &&
+    (!query || [entry.name, entry.group, entry.body, entry.notes, entry.cost].some(value => value?.toLowerCase().includes(query))));
+  return `<p class="small muted">${matches.length} matching entries</p><div class="reference-grid">${matches.map(entry =>
+    `<button class="reference-entry reference-open" data-action="reference-open" data-id="${esc(entry.id)}" aria-haspopup="dialog">
+      <span><strong>${esc(entry.name)}</strong><small class="muted">${esc(entry.ability ? entry.group + ' · ' + entry.ability : entry.group)}</small></span>
+      ${ico('chevron')}
+    </button>`).join('') || '<div class="empty">No matching rules. Try another term.</div>'}</div>`;
 }
+
+function referenceText(body) {
+  const isOutcome = /^[✷✶✴🟎]\s*on\s+(?:a\s+)?(\d+\s*(?:\+|[-–]\s*\d+|[-−]))\s*[,.:]?\s*/iu;
+  return body.split(/(?=[✷✶✴🟎])|\n\n+/u).filter(part => part.trim()).map(part => {
+    const outcome = part.match(isOutcome);
+    if (!outcome) return `<p class="record-details">${esc(part.replace(/^[✷✶✴🟎]/u, '').trim())}</p>`;
+    const range = outcome[1].replace(/\s/g, '').replace(/[–−]/g, '-');
+    const label = {'10+': 'Full success', '7-9': 'Partial success', '6-': 'Miss'}[range];
+    const type = {'10+': 'hit', '7-9': 'partial', '6-': 'miss'}[range] || '';
+    return `<section class="reference-outcome ${type}"><h3>${esc(range)}${label ? ' · ' + label : ''}</h3>
+      <p class="record-details">${esc(part.slice(outcome[0].length).trim())}</p></section>`;
+  }).join('');
+}
+
+function openReference(id, trigger) {
+  const entry = referenceById.get(id);
+  if (!entry) return;
+  if (trigger && !trigger.closest('#modal')) castTrigger = trigger;
+  const chips = entry.item ? [
+    entry.cost ? 'Cost ' + entry.cost : '',
+    entry.item.uses ? entry.item.uses + (entry.item.uses === 1 ? ' use' : ' uses') : '',
+    entry.item.damage ? entry.item.damage + ' damage' : '',
+    entry.item.armor ? '+' + entry.item.armor + ' Armor' : '',
+    ...entry.item.tags,
+  ].filter(Boolean) : [];
+  modal(entry.name, `<div class="reference-dialog">
+    <p class="small muted">${esc(entry.ability ? entry.group + ' · ' + entry.ability : entry.group)}</p>
+    ${chips.length ? `<div class="pillbar">${chips.map(chip => pill(chip)).join('')}</div>` : ''}
+    <div class="reference-body">${referenceText(entry.body)}</div>
+    ${entry.notes ? `<section class="reference-body reference-notes"><h3>At the table</h3>${referenceText(entry.notes)}</section>` : ''}
+    ${entry.links ? `<div class="group-list">${entry.links.map(([target, name]) =>
+      `<button class="btn reference-open" data-action="reference-open" data-id="${esc(target)}">${esc(name)}${ico('chevron')}</button>`).join('')}</div>` : ''}
+    ${entry.item ? `<button class="btn primary btn-wide" data-action="reference-add-item" data-id="${esc(id)}">${ico('plus')} Add to inventory</button>` : ''}
+    ${entry.group === 'Struggle' ? `<button class="btn primary btn-wide" data-action="reference-track-struggle" data-id="${esc(id)}">Track in Campaign journal</button>` : ''}
+  </div>`, 'reference');
+  document.querySelector('#modal .modal-head button')?.focus();
+}
+
+function addReferenceItem(id, button) {
+  const entry = referenceById.get(id);
+  if (!entry?.item || button.disabled) return;
+  const toRecord = source => {
+    const {weapon, damage, uses, tags, armor} = source.item;
+    return cleanRecord('inventory', {name: source.name, details: source.body.replace(/[✷✶✴🟎]/gu, ''),
+      weapon, damage, maxUses: uses, keywords: tags, bonuses: {armor}}, uid());
+  };
+  const items = [entry, ...(entry.bundle || []).map(id => referenceById.get(id)).filter(source => source?.item)];
+  current().inventory.unshift(...items.map(toRecord));
+  save();
+  button.disabled = true;
+  button.textContent = items.length === 1 ? 'Added to inventory' : `Added ${items.length} items to inventory`;
+}
+
+function currentStruggle(c) {
+  if (c.struggle !== undefined) return c.struggle;
+  return /\balwyn\b/i.test(c.alwyn?.name || c.name) && referenceById.has('struggle-amnesia')
+    ? {id: 'struggle-amnesia', progress: 0, notes: '', prompts: '', used: false, resolved: false} : null;
+}
+
+function journalStruggle(c) {
+  const struggle = currentStruggle(c);
+  const entry = referenceById.get(struggle?.id);
+  if (!entry) return infoCard('Struggle', `<button class="btn" data-action="journal-struggles">Browse Struggles</button>`);
+  const amnesia = entry.id === 'struggle-amnesia';
+  return infoCard('Struggle · ' + esc(entry.name), `<div class="block-stack">
+    ${struggle.resolved ? pill('Resolved', 'mint') : entry.capacity ? pill(`${entry.track} ${struggle.progress} / ${entry.capacity}`, 'accent') : ''}
+    ${amnesia && !struggle.resolved ? `<p class="small muted">${struggle.used ? 'Shards used this session.' : 'Shards available this session.'}</p>` : ''}
+    <div class="reference-body">${referenceText(entry.body)}</div>
+    ${struggle.prompts ? `<div><strong>Answers to the prompts</strong><p class="record-details">${esc(struggle.prompts)}</p></div>` : ''}
+    ${struggle.notes ? `<div><strong>${amnesia ? 'Flashbacks & clues' : 'Struggle notes'}</strong><p class="record-details">${esc(struggle.notes)}</p></div>` : ''}
+    ${amnesia ? `<p class="small muted">On the fifth Memory, confess a truth and resolve the Struggle. Level Up while keeping marked XP, then lose the Struggle’s benefits and drawbacks and clear its advancement box if marked.</p>` : ''}
+    <div class="flex-row"><button class="btn" data-action="edit-struggle">${ico('edit')} Edit tracker</button>
+      <button class="btn" data-action="journal-struggles">Browse Struggles</button>
+      <button class="btn" data-action="reference-open" data-id="struggle-rules">Reveal & resolve rules</button></div>
+  </div>`);
+}
+
+function editStruggle(trigger) {
+  const struggle = currentStruggle(current());
+  const entry = referenceById.get(struggle?.id);
+  if (!entry) return;
+  const amnesia = entry.id === 'struggle-amnesia';
+  castTrigger = trigger;
+  modal('Track ' + entry.name, `<form id="struggle-form" class="block-stack">
+    ${entry.capacity ? `<label><span class="field-label">${esc(entry.track)}</span>
+      <select name="progress">${numberOptions(0, entry.capacity, struggle.progress)}</select></label>` : ''}
+    ${amnesia ? `<label class="spell-availability"><input type="checkbox" name="used"${struggle.used ? ' checked' : ''}>Shards used this session</label>` : ''}
+    <label><span class="field-label">Answers to the prompts</span><textarea name="prompts" maxlength="12000">${esc(struggle.prompts)}</textarea></label>
+    <label><span class="field-label">${amnesia ? 'Flashbacks & clues' : 'Struggle notes'}</span><textarea name="notes" maxlength="12000">${esc(struggle.notes)}</textarea></label>
+    <label class="spell-availability"><input type="checkbox" name="resolved"${struggle.resolved ? ' checked' : ''}>Resolved</label>
+    <div class="modal-actions"><button type="button" class="btn" data-action="close-modal">Cancel</button><button class="btn primary">Save tracker</button></div>
+  </form>`, 'reference');
+}
+
+function trackStruggle(id) {
+  const entry = referenceById.get(id);
+  if (entry?.group !== 'Struggle') return;
+  const c = current();
+  const old = currentStruggle(c);
+  if (old?.id !== id) {
+    if (old && !confirm('Replace the current Struggle and its tracker?')) return;
+    c.struggle = {id, progress: entry.initial || 0, notes: '', prompts: '', used: false, resolved: false};
+    save();
+  }
+  closeModal();
+  screen = 'notes';
+  render();
+  window.scrollTo({top: 0});
+}
+
 
 function renderClassPaths() {
   const c = current();
@@ -948,6 +1064,7 @@ function renderClassPaths() {
       const wizard = path.className === 'Wizard' ? PATHS.find(entry => entry.id === path.name) : null;
       return `<section class="card"><div class="flex-spread"><div><span class="small muted">${path.className === ownClass ? esc(path.className) : 'Multiclass · ' + esc(path.className)}</span><h2>${esc(path.name)}</h2></div><button class="btn ${owned ? 'primary' : ''}" data-action="class-path" data-path="${esc(path.key)}">${owned ? 'Acquired' : 'Acquire'}</button></div>
         <p class="small muted"><strong>${esc(ownClass === 'Wizard' ? wizard?.starting || path.starter.name : path.starter.name)}</strong> · ${esc(ownClass === 'Wizard' ? wizard?.startingDesc || path.starter.hint : path.starter.hint)}</p>
+        <button class="btn tiny" data-action="reference-open" data-id="path-${esc(path.className.toLowerCase() + '-' + path.id)}" aria-haspopup="dialog">Full Path rules</button>
         ${path.moves.map(move => {
           const id = wizard ? wizard.moves.find(entry => entry.id.replace(/[^a-z]/gi,'').toLowerCase() === move.name.replace(/[^a-z]/gi,'').toLowerCase())?.id || move.name : path.key + '::' + move.id;
           const description = wizard?.moves.find(entry => entry.id === id)?.desc || move.hint;
@@ -1055,6 +1172,7 @@ function resetCharacterTools() {
 }
 
 function renderNotes(){const c=current();return pagehead('Campaign journal','Session notes, discoveries, and relationships.')+`<div class="cols-2"><div class="block-stack">
+${journalStruggle(c)}
 ${recordCard(c,'journalEntries')}
 ${c.notes ? infoCard('Earlier notes for this age', '<textarea data-bind="notes">'+esc(c.notes)+'</textarea>') : ''}</div><div class="block-stack">
 ${infoCard('Relationships',`<p class="para small">Record PCs, relationship descriptions, and Depth (0–3).</p><div class="group-list">${c.relationships.length?c.relationships.map((rel,i)=>`<div class="group-item"><div style="flex:1"><strong>${esc(rel.name)}</strong><div class="micro muted">${esc(rel.description)}</div><div class="micro muted">Depth: ${clamp(rel.depth||0,0,3)}</div></div><button class="icon-btn" data-action="relationship-edit" data-index="${i}" aria-label="Edit relationship">${ico('edit')}</button></div>`).join(''):'<div class="empty">No relationships yet</div>'}</div><button class="btn" style="margin-top:13px" data-action="relationship-new">${ico('plus')} Add relationship</button>`)}
@@ -1444,7 +1562,12 @@ case 'quick-status':
   break;
 case 'quick-roll': libraryReturn=undefined; libraryTrigger=undefined; castTrigger=a; modal('Roll dice',quickDiceCard()); break;
 case 'more-nav': modal('Navigate', '<div class="group-list">'+NAV.map(entry=>`<button class="btn" data-action="nav" data-screen="${entry.id}">${ico(entry.icon)} ${entry.label}</button>`).join('')+'</div>'); break;
-case 'rules-category': rulesCategory=a.dataset.category; render(); break;
+case 'rules-category': rulesCategory=a.dataset.category; rulesFamily='All'; render(); break;
+case 'reference-open': openReference(a.dataset.id, a); break;
+case 'reference-add-item': addReferenceItem(a.dataset.id, a); break;
+case 'reference-track-struggle': trackStruggle(a.dataset.id); break;
+case 'edit-struggle': editStruggle(a); break;
+case 'journal-struggles': rulesCategory='Struggles'; rulesFamily='All'; rulesSearch=''; screen='rules'; render(); window.scrollTo({top:0}); break;
 case 'path-class': pathClassFilter=a.dataset.class; render(); break;
 case 'class-path': classPathToggle(a.dataset.path); break;
 case 'class-move': { if(!c.paths.includes(a.dataset.path))break; const id=a.dataset.move; c.moves=c.moves.includes(id)?c.moves.filter(move=>move!==id):[...c.moves,id];save();render();break; }
@@ -1521,6 +1644,7 @@ default:break;
 }}
 document.addEventListener('click',e=>{const a=e.target.closest('[data-action]');if(a){e.preventDefault();handleAction(a)}});
 document.addEventListener('change',e=>{const a=e.target;
+if(a.id==='rules-family'){rulesFamily=a.value;document.getElementById('rules-results').innerHTML=rulesResults();}
 if(a.closest?.('[data-dice-builder]'))updateDamageDice(a);
 if(a.id==='new-character-class'){
   document.getElementById('new-class-summary').textContent=CLASS_RULES[a.value]?.startingDescription||'';
@@ -1544,6 +1668,22 @@ document.addEventListener('input', e => {
   }
 });
 document.addEventListener('submit',e=>{
+if (e.target.id === 'struggle-form') {
+  e.preventDefault();
+  const c = current();
+  const struggle = currentStruggle(c);
+  const entry = referenceById.get(struggle?.id);
+  if (!entry) return;
+  const data = new FormData(e.target);
+  c.struggle = {...struggle, progress: itemInteger(data.get('progress'), 0, entry.capacity || 0),
+    prompts: String(data.get('prompts') || '').slice(0, 12000), notes: String(data.get('notes') || '').slice(0, 12000),
+    used: data.has('used'), resolved: data.has('resolved')};
+  save();
+  closeModal();
+  render();
+  document.querySelector('[data-action="edit-struggle"]')?.focus({preventScroll: true});
+  return;
+}
 if (['spell-damage-form','play-damage-form'].includes(e.target.id)) {
   e.preventDefault();
   rollDamage(e.target);

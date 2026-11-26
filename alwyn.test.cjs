@@ -30,7 +30,9 @@ function openApp(saved = null, random = Math.random) {
     FormData: class { constructor(node) { return new Map(Object.entries(node.fields)); } },
     setTimeout: () => 1, clearTimeout() {}, confirm: () => true,
   };
-  vm.runInNewContext(fs.readFileSync(require.resolve('./rules-data.js'), 'utf8'), context);
+  for (const file of ['./rules-data.js', './reference-data.js']) {
+    vm.runInNewContext(fs.readFileSync(require.resolve(file), 'utf8'), context);
+  }
   vm.runInNewContext(app.replace(/\}\)\(\);\s*$/, 'window.test = {fresh, normalizeImported}; })();'), context);
   return {
     ...window.test,
@@ -550,6 +552,7 @@ test('all navigation pages render, Play tools comes second, and quick dice opens
 test('rules reference searches every class and characters can acquire and retain multiclass Paths', () => {
   const app=openApp();
   app.click('nav',{screen:'rules'});
+  app.click('rules-category', {category: 'All'});
   assert.match(app.screen(),/Barbarian/);
   assert.match(app.screen(),/Wizard/);
   app.input('[data-rules-search]',{value:'Mirror Image'});
@@ -580,5 +583,69 @@ test('starting choices create editable inventory records for multiple classes', 
   assert.equal(inventory[0].damage, '1d6');
   assert.equal(inventory[0].equipped, true);
   assert.equal(inventory[1].uses, 2);
+});
+
+test('reference dialogs show complete move outcomes, Path abilities, and keywords', () => {
+  const app = openApp();
+  app.click('nav', {screen:'rules'});
+  assert.doesNotMatch(app.screen(), /data-category="Magic"/);
+  assert.match(app.screen(), /data-id="move-trade-blows" aria-haspopup="dialog"/);
+  app.click('reference-open', {id:'move-trade-blows'});
+  const dialog = () => app.element('modal-content').innerHTML;
+  assert.match(dialog(), /10\+ · Full success/);
+  assert.match(dialog(), /7-9 · Partial success/);
+  assert.match(dialog(), /6- · Miss/);
+  assert.match(dialog(), /You inflict max dmg/);
+  assert.match(dialog(), /After choices have been made/);
+  app.click('reference-open', {id:'path-wizard-illusionist'});
+  assert.match(dialog(), /Mirror Image/);
+  app.click('reference-open', {id:'ability-wizard-illusionist-3'});
+  assert.equal(app.element('modal-title').textContent, 'Mirror Image');
+  assert.match(dialog(), /mark a Condition/i);
+  app.click('reference-open', {id:'tag-piercing'});
+  assert.match(dialog(), /ignores armor and shield protection/i);
+});
+
+test('equipment catalog adds editable records with dice, uses, armor, and tags', () => {
+  const app = openApp();
+  app.click('nav', {screen:'rules'});
+  app.click('rules-category', {category:'Equipment'});
+  app.change('', {id:'rules-family', value:'Artifacts'});
+  assert.match(app.element('rules-results').innerHTML, /Lazurite Dragon Orb/);
+  assert.doesNotMatch(app.element('rules-results').innerHTML, /Alchemy jug/);
+  app.click('reference-open', {id:'starting-ancestral-longsword'});
+  assert.match(app.element('modal-content').innerHTML, /Add to inventory/);
+  app.click('reference-add-item', {id:'starting-ancestral-longsword'});
+  app.click('reference-add-item', {id:'gear-medium-armor'});
+  app.click('reference-add-item', {id:'magic-item-potion-of-flying'});
+  const inventory = app.state().characters[0].inventory;
+  assert.deepEqual(inventory.slice(0, 4).map(item => item.name), ['Potion of flying','Medium armor','Ancestral longsword','Shield']);
+  assert.equal(inventory[0].uses, 1);
+  assert.equal(inventory[1].bonuses.armor, 2);
+  assert.equal(inventory[2].damage, '1d6');
+  assert.deepEqual(inventory[2].keywords, ['#close']);
+  assert.ok(!inventory[2].equipped);
+  assert.equal(inventory[3].uses, 1);
+});
+
+test('Amnesia tracking saves across Alwyn’s ages, reloads, and imports', () => {
+  const kid = openApp().fresh('Alwyn');
+  const app = openApp({characters:[kid],activeId:kid.id});
+  app.submit('alwyn-form', {});
+  app.click('nav', {screen:'notes'});
+  assert.match(app.screen(), /Struggle · Amnesia/);
+  assert.match(app.screen(), /Memories 0 \/ 5/);
+  assert.match(app.screen(), /mark 1 XP and the GM advances a Threat/);
+  app.click('edit-struggle');
+  assert.match(app.element('modal-content').innerHTML, /Shards used this session/);
+  app.submit('struggle-form', {progress:'2', used:'on', prompts:'A ruined tower', notes:'Remembered the key'});
+  app.click('alwyn-age', {age:'sage'});
+  assert.match(app.screen(), /Memories 2 \/ 5/);
+  assert.match(app.screen(), /Remembered the key/);
+  const state = app.state();
+  const restored = openApp(state);
+  restored.click('nav', {screen:'notes'});
+  assert.match(restored.screen(), /Shards used this session/);
+  assert.equal(restored.normalizeImported(state.characters[0]).struggle.progress, 2);
 });
 

@@ -19,7 +19,7 @@ test('offline installation bypasses stale HTTP assets and caches the versioned s
   assert.ok(app.downloads.every(request=>request.cache==='reload'));
   const html = fs.readFileSync(require.resolve('./index.html'), 'utf8');
   const assets = [...html.matchAll(/(?:src|href)="(\.\/[^"]+\?v=[^"]+)"/g)].map(match => match[1]);
-  assert.equal(assets.length, 6);
+  assert.equal(assets.length, 7);
   for (const asset of assets) assert.ok(app.downloads.some(request => request.url === asset), asset);
 });
 test('activation removes only previous Arcanum caches',async()=>{
