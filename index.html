@@ -8,8 +8,8 @@
 <title>Arcanum — DW2 Character Keeper</title>
 <link rel="icon" href="./icon.svg" type="image/svg+xml"/>
 <link rel="manifest" href="./manifest.webmanifest"/>
-<link rel="stylesheet" href="./styles.css?v=20261126-2"/>
-<link rel="stylesheet" href="./alwyn.css?v=20261126-2"/>
+<link rel="stylesheet" href="./styles.css?v=20261126-3"/>
+<link rel="stylesheet" href="./alwyn.css?v=20261126-3"/>
 </head>
 <body>
 <div id="app" class="app-shell">
@@ -17,10 +17,10 @@
     <div class="brand"><div class="brand-sigil" aria-hidden="true">✦</div><div class="brand-copy"><strong>ARCANUM</strong><span>DW2 WIZARD KEEPER</span></div></div>
     <div class="sidebar-group-label">YOUR CHARACTER</div>
     <div id="nav-desktop" class="nav-list"></div>
-    <div class="sidebar-bottom"><div class="sidebar-note"><span class="status-light"></span>Offline-first · Beta v3</div><button class="sidebar-backup" data-action="export"><span data-icon="download"></span> Export backup</button></div>
+    <div class="sidebar-bottom"><div class="sidebar-note"><span class="status-light"></span>Offline-first · Beta v3</div></div>
   </aside>
   <div class="main-wrap">
-    <header class="topbar"><div class="topbar-left"><span class="mobile-mark">✦</span><div class="top-title"><span id="page-eyebrow">YOUR CHARACTER</span><strong id="page-title">Overview</strong></div></div><div class="top-actions"><button class="icon-btn primary" title="Roll any dice" aria-label="Roll any dice" data-action="quick-roll"><span data-icon="dice"></span></button><button class="icon-btn primary" title="Quick status" aria-label="Quick status" aria-haspopup="dialog" data-action="quick-status"><span data-icon="heart"></span></button><span id="save-status" class="save-status" aria-live="polite">Saved locally</span><button class="icon-btn" title="Switch appearance" aria-label="Switch appearance" data-action="theme"><span data-icon="moon"></span></button><button class="icon-btn" title="Export backup" aria-label="Export backup" data-action="export"><span data-icon="download"></span></button></div></header>
+    <header class="topbar"><div class="topbar-left"><span class="mobile-mark">✦</span><div class="top-title"><span id="page-eyebrow">YOUR CHARACTER</span><strong id="page-title">Overview</strong><select id="mobile-age-picker" aria-label="Alwyn version" hidden></select></div></div><div class="top-actions"><button class="icon-btn primary" title="Roll any dice" aria-label="Roll any dice" data-action="quick-roll"><span data-icon="dice"></span></button><button class="icon-btn primary" title="Quick status" aria-label="Quick status" aria-haspopup="dialog" data-action="quick-status"><span data-icon="heart"></span></button><span id="save-status" class="save-status" aria-live="polite">Saved locally</span></div></header>
     <main class="main-content" id="screen" tabindex="-1"></main>
   </div>
   <nav class="mobile-nav" id="nav-mobile" aria-label="Mobile navigation"></nav>
@@ -28,11 +28,11 @@
 <div id="toast" class="toast" role="status" aria-live="polite"></div>
 <div class="modal-scrim hidden" id="modal-scrim"><div class="modal" role="dialog" aria-modal="true" aria-labelledby="modal-title" id="modal"><div class="modal-head"><h2 id="modal-title">Dialog</h2><button class="icon-btn" aria-label="Close dialog" data-action="close-modal"><span data-icon="x"></span></button></div><div id="modal-content"></div></div></div>
 <input type="file" id="import-file" accept=".json,application/json" hidden/>
-<script src="./drive-config.js?v=20261126-2" defer></script>
-<script src="./drive-sync.js?v=20261126-2" defer></script>
-<script src="./rules-data.js?v=20261126-2" defer></script>
-<script src="./reference-data.js?v=20261126-2" defer></script>
-<script src="./app.js?v=20261126-2" defer></script>
+<script src="./drive-config.js?v=20261126-3" defer></script>
+<script src="./drive-sync.js?v=20261126-3" defer></script>
+<script src="./rules-data.js?v=20261126-3" defer></script>
+<script src="./reference-data.js?v=20261126-3" defer></script>
+<script src="./app.js?v=20261126-3" defer></script>
 </body>
 </html>
 

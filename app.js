@@ -2,7 +2,12 @@
 (()=>{'use strict';
 const STORAGE='arcanum_dw2_v3_v1';
 const REFERENCE = window.ARCANUM_RULES || {};
-const tableReference = window.ARCANUM_REFERENCE || [];
+const tableReference = (window.ARCANUM_REFERENCE || []).map(entry => {
+  if (entry.group === 'Shopping rules' || entry.family === 'Services') return {...entry, category: 'GM'};
+  if (entry.family !== 'Starting gear') return entry;
+  const family = entry.item.weapon ? 'Weapons' : entry.item.armor ? 'Armor' : 'Gear';
+  return {...entry, family};
+});
 const referenceById = new Map(tableReference.map(entry => [entry.id, entry]));
 const CLASS_RULES = REFERENCE.RULES || {Wizard:{name:'Wizard',hp:6,startingDescription:'Prepare three schools and weave the arcane.',paths:[]}};
 const SCHOOLS=[
@@ -243,6 +248,12 @@ function render() {
   if (screen === 'alwyn' && !root.alwyn) screen = 'sheet';
   document.documentElement.dataset.theme = db.theme === 'light' ? 'light' : 'dark';
   document.getElementById('page-title').textContent = pageTitles[screen];
+  const mobileAge = document.getElementById('mobile-age-picker');
+  mobileAge.hidden = !root.alwyn;
+  mobileAge.innerHTML = root.alwyn ? [
+    diceOption('overview', screen === 'alwyn' ? 'overview' : activeAge().id, 'Alwyn overview'),
+    ...ages.map(age => diceOption(age.id, screen === 'alwyn' ? 'overview' : activeAge().id, age.name)),
+  ].join('') : '';
   document.getElementById('page-eyebrow').textContent = (
     root.alwyn && screen !== 'alwyn' ? characterName(root) + ' · ' + activeAge().name : characterName(root)
   ).toUpperCase();
@@ -268,6 +279,24 @@ function renderAgeNav() {
       <strong>${age.name}</strong><span>Age ${age.years}</span>
     </button>`).join('')}
   </nav>`;
+}
+
+function chooseAlwynAge(id, mobile = false) {
+  if (!currentCharacter().alwyn) return;
+  const age = ages.find(entry => entry.id === id);
+  if (id === 'overview') screen = 'alwyn';
+  else if (age) {
+    db.age = age.id;
+    if (screen === 'alwyn') screen = 'sheet';
+    searchTerm = '';
+    magicFilter = 'All';
+    resetCharacterTools();
+    persist();
+  } else return;
+  render();
+  const selector = mobile ? '#mobile-age-picker' : age ? `.age-tab[data-age="${age.id}"]` : '[data-action="alwyn-overview"]';
+  document.querySelector(selector)?.focus({preventScroll: true});
+  window.scrollTo({top: 0});
 }
 
 function renderAlwyn() {
@@ -465,10 +494,12 @@ function recordCard(c, key) {
       record.weapon ? ['Weapon', record.damage].filter(Boolean).join(' · ') : '',
       ...record.keywords, ...Object.entries(record.bonuses).map(([stat, value]) => `${fmtSign(value)} ${itemBonusLabels[stat]}`),
     ].filter(Boolean) : [];
-    return `<div class="group-item"><div class="record-content"><strong>${esc(record.name)}</strong>
+    return `<div class="group-item${inventory ? ' inventory-row' : ''}"><div class="record-content"><strong>${esc(record.name)}</strong>
       <div class="micro muted">${esc(summary)}</div>${tags.length ? `<div class="pillbar inventory-tags">${tags.map(tag => pill(tag)).join('')}</div>` : ''}
       <div class="small record-details">${esc(record.details)}</div></div><div class="record-actions">
+      ${inventory && record.keywords.length ? `<button class="btn tiny" data-action="inventory-keywords" data-id="${esc(record.id)}" aria-label="Keywords for ${esc(record.name)}" aria-haspopup="dialog">Keywords</button>` : ''}
       ${inventory && record.maxUses ? `<button class="btn tiny" data-action="inventory-use" data-id="${esc(record.id)}" aria-label="Use ${esc(record.name)}" ${record.uses ? '' : 'disabled'}>Use</button>` : ''}
+      ${inventory && record.maxUses ? `<button class="btn tiny" data-action="inventory-refill" data-id="${esc(record.id)}" aria-label="Refill ${esc(record.name)}" ${record.uses >= record.maxUses ? 'disabled' : ''}>Refill</button>` : ''}
       <button class="btn tiny" data-action="record-edit" data-key="${key}" data-id="${esc(record.id)}" aria-label="Edit ${esc(record.name)}">Edit</button></div></div>`;
   }).join('');
   const earlier = !inventory && !sharedJournal && c.notes
@@ -598,13 +629,14 @@ function schoolBlock(s,c){const owned=bonusSchools(c).includes(s.id),active=allP
 const workspaceSections = {
   magic: [['spells', 'Spells'], ['schools', 'Schools']],
   play: [['roll', 'Roll'], ['damage', 'Damage'], ['status', 'Status'], ['rules', 'Rules']],
+  notes: [['journal', 'Shared journal'], ['struggle', 'Struggle'], ['relationships', 'Relationships']],
 };
-const selectedSection = {magic: 'spells', play: 'roll'};
+const selectedSection = {magic: 'spells', play: 'roll', notes: 'journal'};
 const playDamageMoves = ['cast', 'melee', 'ranged'];
 
 function workspaceNav(page) {
   return `<div class="workspace-start mobile-workspace" data-workspace-start></div>
-  <nav class="workspace-nav mobile-workspace" aria-label="${pageTitles[page]} sections" data-workspace-nav>
+  <nav class="workspace-nav ${page === 'notes' ? 'journal-nav' : 'mobile-workspace'}" aria-label="${pageTitles[page]} sections" data-workspace-nav>
     ${workspaceSections[page].map(([id, label]) => `<button type="button" data-action="workspace-section"
       data-section="${id}" aria-pressed="${selectedSection[page] === id}">${label}</button>`).join('')}
   </nav>`;
@@ -640,7 +672,7 @@ let workspaceTouch;
 document.addEventListener('touchstart', event => {
   workspaceTouch = undefined;
   if (event.touches.length !== 1 || !workspaceSections[screen] || !window.matchMedia('(max-width: 720px)').matches
-      || !event.target.closest('.magic-layout, .play-layout, [data-workspace-nav]')
+      || !event.target.closest('.magic-layout, .play-layout, .journal-layout, [data-workspace-nav]')
       || event.target.closest('input, select, textarea, [contenteditable]')) return;
   const touch = event.touches[0];
   if (touch.clientX < 24 || touch.clientX > window.innerWidth - 24) return;
@@ -910,7 +942,7 @@ function playDamageCard(c) {
 }
 
 const referenceTabs = ['All', 'Core moves', 'Classes', 'Paths', 'Equipment', 'Keywords', 'Struggles', 'GM'];
-const equipmentFamilies = ['Armor', 'Weapons', 'Gear', 'Starting gear', 'Magic items', 'Artifacts', 'Services'];
+const equipmentFamilies = ['Armor', 'Weapons', 'Gear', 'Magic items', 'Artifacts'];
 let rulesFamily = 'All';
 
 function renderRules() {
@@ -943,16 +975,90 @@ function rulesResults() {
     </button>`).join('') || '<div class="empty">No matching rules. Try another term.</div>'}</div>`;
 }
 
+function referenceParagraphs(body) {
+  const sections = [];
+  const lines = body.trim().split(/\r?\n/).map(line => line.trim()).filter(Boolean);
+  const trait = /^([\p{Lu}][\p{L}\d ’'&-]{1,44}(?:\s*\([+-]+\))?)[.·—]\s+(.+)/u;
+  const pickers = /(?:\b(?:choose|pick|select|ask|answer)\b|from the following|options? (?:are|include)|requirements?|examples?|questions?)/i;
+  const followup = /^(?:After (?:you|the choices)|For each|When (?:you reach|the last|you finish)|If (?:you|the)|Then |Go Out in a Blaze of Glory\b)/;
+  let list = [];
+  let expectingChoices = false;
+  const flush = () => {
+    if (!list.length) return;
+    sections.push(`<ul class="reference-list">${list.map(line => `<li>${esc(line)}</li>`).join('')}</ul>`);
+    list = [];
+  };
+  for (const line of lines) {
+    if (line.startsWith('Questions: ') && line.endsWith('?')) {
+      flush();
+      sections.push('<h4>Questions</h4>');
+      list = line.slice('Questions: '.length).split(/(?<=\?)\s+/);
+      flush();
+      continue;
+    }
+    if (line.includes('☐') && line.replace(/[☐\s]/g, '')) {
+      const parts = line.split(/\s*☐\s*/);
+      const choices = parts.slice(1).filter(part => part.trim());
+      if (choices.length && line.includes('☐ ')) {
+        flush();
+        if (parts[0]) sections.push(`<p>${esc(parts[0])}</p>`);
+        list = choices;
+        flush();
+        continue;
+      }
+    }
+    if (expectingChoices && (!followup.test(line) || line.endsWith('?') || !list.length) && !line.endsWith(':')) {
+      list.push(line);
+      continue;
+    }
+    if (/^(?:[+](?:STR|DEX|INT|WIS|CHA)\b|[•✦]\s+)/.test(line)) {
+      list.push(line.replace(/^[•✦]\s+/, ''));
+      continue;
+    }
+    flush();
+    expectingChoices = line.endsWith(':') && pickers.test(line);
+    const label = line.match(trait);
+    if (label && !expectingChoices) {
+      sections.push(`<p><strong>${esc(label[1].trim())}</strong>${esc(line.slice(label[1].length))}</p>`);
+    } else if (!/[.?!:]/.test(line) && /^[A-Z]/.test(line) && line.split(/\s+/).length <= 7) {
+      sections.push(`<h4>${esc(line)}</h4>`);
+    } else sections.push(`<p>${esc(line)}</p>`);
+  }
+  flush();
+  return sections.join('');
+}
+
+function advancementTiers(body) {
+  const tiers = [];
+  for (const line of body.split(/\n\s*\n/).map(line => line.trim()).filter(Boolean)) {
+    if (line === 'Advancements') continue;
+    const unlock = line.match(/^From Level (\d+) onwards/);
+    if (!tiers.length || unlock) {
+      tiers.push({title: unlock ? 'Level ' + unlock[1] + '+' : 'On level-up', intro: line, options: new Map()});
+      continue;
+    }
+    const count = (line.match(/☐/g) || []).length;
+    const option = line.replace(/^[☐✦\s]+/, '').trim();
+    const {options} = tiers.at(-1);
+    options.set(option, (options.get(option) || 0) + count);
+  }
+  return `<div class="advancement-tiers">${tiers.map(({title, intro, options}, i) => `<section class="advancement-tier">
+    <h4>${esc(title)}</h4>${i === 0 ? `<p>${esc(intro)}</p>` : ''}
+    <ul>${Array.from(options, ([option, count]) => `<li><span>${esc(option)}</span>${count > 0
+      ? `<span class="pill">${count} ${count === 1 ? 'pick' : 'picks'}</span>` : ''}</li>`).join('')}</ul>
+  </section>`).join('')}</div>`;
+}
+
 function referenceText(body) {
   const isOutcome = /^[✷✶✴🟎]\s*on\s+(?:a\s+)?(\d+\s*(?:\+|[-–]\s*\d+|[-−]))\s*[,.:]?\s*/iu;
   return body.split(/(?=[✷✶✴🟎])|\n\n+/u).filter(part => part.trim()).map(part => {
     const outcome = part.match(isOutcome);
-    if (!outcome) return `<p class="record-details">${esc(part.replace(/^[✷✶✴🟎]/u, '').trim())}</p>`;
+    if (!outcome) return referenceParagraphs(part.replace(/^[✷✶✴🟎]/u, '').trim());
     const range = outcome[1].replace(/\s/g, '').replace(/[–−]/g, '-');
     const label = {'10+': 'Full success', '7-9': 'Partial success', '6-': 'Miss'}[range];
     const type = {'10+': 'hit', '7-9': 'partial', '6-': 'miss'}[range] || '';
     return `<section class="reference-outcome ${type}"><h3>${esc(range)}${label ? ' · ' + label : ''}</h3>
-      <p class="record-details">${esc(part.slice(outcome[0].length).trim())}</p></section>`;
+      ${referenceParagraphs(part.slice(outcome[0].length))}</section>`;
   }).join('');
 }
 
@@ -971,13 +1077,14 @@ function openReference(id, trigger) {
     <p class="small muted">${esc(entry.ability ? entry.group + ' · ' + entry.ability : entry.group)}</p>
     ${chips.length ? `<div class="pillbar">${chips.map(chip => pill(chip)).join('')}</div>` : ''}
     <div class="reference-body">${referenceText(entry.body)}</div>
-    ${entry.notes ? `<section class="reference-body reference-notes"><h3>At the table</h3>${referenceText(entry.notes)}</section>` : ''}
+    ${entry.notes ? `<section class="reference-body reference-notes" id="reference-notes"><h3>${entry.category === "Classes" ? "Advancement choices" : "At the table"}</h3>${entry.category === "Classes" ? advancementTiers(entry.notes) : referenceText(entry.notes)}</section>` : ''}
     ${entry.links ? `<div class="group-list">${entry.links.map(([target, name]) =>
       `<button class="btn reference-open" data-action="reference-open" data-id="${esc(target)}">${esc(name)}${ico('chevron')}</button>`).join('')}</div>` : ''}
     ${entry.item ? `<button class="btn primary btn-wide" data-action="reference-add-item" data-id="${esc(id)}">${ico('plus')} Add to inventory</button>` : ''}
     ${entry.group === 'Struggle' ? `<button class="btn primary btn-wide" data-action="reference-track-struggle" data-id="${esc(id)}">Track in Campaign journal</button>` : ''}
   </div>`, 'reference');
-  document.querySelector('#modal .modal-head button')?.focus();
+  document.querySelector('#modal .modal-head button')?.focus({preventScroll: true});
+  if (trigger?.dataset.jump === 'advancements') document.querySelector('#reference-notes')?.scrollIntoView({block:'start'});
 }
 
 function addReferenceItem(id, button) {
@@ -993,6 +1100,18 @@ function addReferenceItem(id, button) {
   save();
   button.disabled = true;
   button.textContent = items.length === 1 ? 'Added to inventory' : `Added ${items.length} items to inventory`;
+}
+
+function openItemKeywords(item, trigger) {
+  if (!item?.keywords.length) return;
+  castTrigger = trigger;
+  const content = item.keywords.map(tag => {
+    const definition = referenceById.get('tag-' + tag.slice(1).toLowerCase());
+    return `<section class="reference-outcome"><h3>${esc(tag)}</h3>
+      ${referenceText(definition?.body || 'Custom keyword. Use the meaning agreed at your table.')}</section>`;
+  }).join('');
+  modal(item.name + ' · Keywords', `<div class="reference-body">${content}</div>`, 'reference');
+  document.querySelector('#modal .modal-head button')?.focus();
 }
 
 function currentStruggle(c) {
@@ -1048,6 +1167,7 @@ function trackStruggle(id) {
   }
   closeModal();
   screen = 'notes';
+  selectedSection.notes = 'struggle';
   render();
   window.scrollTo({top: 0});
 }
@@ -1058,7 +1178,7 @@ function renderClassPaths() {
   const ownClass = c.className || 'Wizard';
   const paths = Object.values(CLASS_RULES).flatMap(rule => rule.paths.map(path => ({...path, className:rule.name, key:rule.name === 'Wizard' ? path.name : rule.name + '::' + path.id})));
   return pagehead('Paths & growth','Choose your class Paths or a multiclass Path, then learn its moves separately.') +
-    infoCard('Advancement plan', `<p class="small muted">Level ${c.level} · ${esc(ownClass)}. Choose Paths through level-up advancements or GM approval.</p><label><span class="field-label">Advancement history / choices</span><textarea data-bind="advancementNotes">${esc(c.advancementNotes || '')}</textarea></label>`) +
+    infoCard('Advancement plan', `<p class="small muted">Level ${c.level} · ${esc(ownClass)}. Choose Paths through level-up advancements or GM approval.</p><p><button class="btn tiny" data-action="reference-open" data-id="class-${esc(ownClass.toLowerCase())}" data-jump="advancements" aria-haspopup="dialog">Advancement choices</button></p><label><span class="field-label">Advancement history / choices</span><textarea data-bind="advancementNotes">${esc(c.advancementNotes || '')}</textarea></label>`) +
     `<div class="tabset path-filters">${['All', ...Object.keys(CLASS_RULES)].map(name => `<button class="tab ${pathClassFilter === name ? 'active' : ''}" data-action="path-class" data-class="${name}">${name}</button>`).join('')}</div><div class="reference-grid">${paths.filter(path => pathClassFilter === 'All' || path.className === pathClassFilter).map(path => {
       const owned = c.paths.includes(path.key);
       const wizard = path.className === 'Wizard' ? PATHS.find(entry => entry.id === path.name) : null;
@@ -1171,12 +1291,14 @@ function resetCharacterTools() {
   diceLast = null; playDamagePreset = ''; playDamage = {};
 }
 
-function renderNotes(){const c=current();return pagehead('Campaign journal','Session notes, discoveries, and relationships.')+`<div class="cols-2"><div class="block-stack">
-${journalStruggle(c)}
-${recordCard(c,'journalEntries')}
-${c.notes ? infoCard('Earlier notes for this age', '<textarea data-bind="notes">'+esc(c.notes)+'</textarea>') : ''}</div><div class="block-stack">
-${infoCard('Relationships',`<p class="para small">Record PCs, relationship descriptions, and Depth (0–3).</p><div class="group-list">${c.relationships.length?c.relationships.map((rel,i)=>`<div class="group-item"><div style="flex:1"><strong>${esc(rel.name)}</strong><div class="micro muted">${esc(rel.description)}</div><div class="micro muted">Depth: ${clamp(rel.depth||0,0,3)}</div></div><button class="icon-btn" data-action="relationship-edit" data-index="${i}" aria-label="Edit relationship">${ico('edit')}</button></div>`).join(''):'<div class="empty">No relationships yet</div>'}</div><button class="btn" style="margin-top:13px" data-action="relationship-new">${ico('plus')} Add relationship</button>`)}
-</div></div>`;}
+function renderNotes() {
+  const c = current(), section = selectedSection.notes;
+  const journal = () => recordCard(c, 'journalEntries') + (c.alwyn && c.notes
+    ? infoCard('Earlier notes for this age', '<textarea aria-label="Earlier notes" data-bind="notes">'+esc(c.notes)+'</textarea>') : '');
+  const panels = {journal, struggle: () => journalStruggle(c), relationships: () => infoCard('Relationships',`<p class="para small">Record PCs, relationship descriptions, and Depth (0–3).</p><div class="group-list">${c.relationships.length?c.relationships.map((rel,i)=>`<div class="group-item"><div style="flex:1"><strong>${esc(rel.name)}</strong><div class="micro muted">${esc(rel.description)}</div><div class="micro muted">Depth: ${clamp(rel.depth||0,0,3)}</div></div><button class="icon-btn" data-action="relationship-edit" data-index="${i}" aria-label="Edit relationship">${ico('edit')}</button></div>`).join(''):'<div class="empty">No relationships yet</div>'}</div><button class="btn" style="margin-top:13px" data-action="relationship-new">${ico('plus')} Add relationship</button>`)};
+  return pagehead('Campaign journal', 'Session notes, your Struggle, and relationships.') + workspaceNav('notes')
+    + '<div class="journal-layout">' + workspacePanel('notes', section, panels[section]()) + '</div>';
+}
 function renderEquipment() {
   const c = current();
   return pagehead('Equipment & inventory', c.alwyn ? 'Shared inventory for all three ages.' : 'Manage what you carry and equip.') + recordCard(c, 'inventory');
@@ -1193,6 +1315,7 @@ function modal(title, content, view = '') {
   document.getElementById('modal-scrim').classList.remove('hidden');
   document.body.style.overflow = 'hidden';
   dialog.scrollTop = 0;
+  document.getElementById('modal-content').scrollTop = 0;
 }
 
 function closeModal() {
@@ -1553,6 +1676,18 @@ case 'inventory-use': {
   render();
   break;
 }
+case 'inventory-refill': {
+  const item = c.inventory.find(record => record.id === a.dataset.id);
+  if (!item || !item.maxUses || item.uses >= item.maxUses) break;
+  item.uses = item.maxUses;
+  save();
+  render();
+  toast(`${item.name} refilled to ${item.maxUses}.`);
+  break;
+}
+case 'inventory-keywords':
+  openItemKeywords(c.inventory.find(record => record.id === a.dataset.id), a);
+  break;
 case 'nav':if(!NAV.some(entry=>entry.id===a.dataset.screen))break;closeModal();screen=a.dataset.screen;searchTerm='';render();window.scrollTo({top:0,behavior:'smooth'});break;
 case 'workspace-section': selectWorkspaceSection(a.dataset.section, a); break;
 case 'quick-status':
@@ -1581,21 +1716,8 @@ case 'morning-roll': {
   document.querySelector('[data-action="morning-roll"]')?.focus();
   break;
 }
-case 'alwyn-overview':screen='alwyn';render();document.querySelector('[data-action="alwyn-overview"]')?.focus();break;
-case 'alwyn-age': {
-  const age = ages.find(entry => entry.id === a.dataset.age);
-  if (!age || !c.alwyn) break;
-  db.age = age.id;
-  if (screen === 'alwyn') screen = 'sheet';
-  searchTerm = '';
-  magicFilter = 'All';
-  resetCharacterTools();
-  persist();
-  render();
-  document.querySelector(`.age-tab[data-age="${age.id}"]`)?.focus();
-  window.scrollTo({top: 0});
-  break;
-}
+case 'alwyn-overview': chooseAlwynAge('overview'); break;
+case 'alwyn-age': chooseAlwynAge(a.dataset.age); break;
 case 'theme':db.theme=db.theme==='dark'?'light':'dark';save();render();break;
 case 'drive-sync':driveSync?.activate();break;
 case 'drive-disconnect':driveSync?.disconnect();break;
@@ -1644,6 +1766,7 @@ default:break;
 }}
 document.addEventListener('click',e=>{const a=e.target.closest('[data-action]');if(a){e.preventDefault();handleAction(a)}});
 document.addEventListener('change',e=>{const a=e.target;
+if(a.id==='mobile-age-picker')chooseAlwynAge(a.value, true);
 if(a.id==='rules-family'){rulesFamily=a.value;document.getElementById('rules-results').innerHTML=rulesResults();}
 if(a.closest?.('[data-dice-builder]'))updateDamageDice(a);
 if(a.id==='new-character-class'){

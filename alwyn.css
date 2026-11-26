@@ -71,6 +71,10 @@
   .age-grid { grid-template-columns: minmax(0, 1fr); }
 }
 
+@media (max-width: 720px) {
+  .age-nav { display: none; }
+}
+
 @media (max-width: 420px) {
   .age-nav { gap: 3px; }
   .age-tab { padding-inline: 4px; text-align: center; }
@@ -83,3 +87,4 @@
 @media print {
   .age-nav { display: none; }
 }
+

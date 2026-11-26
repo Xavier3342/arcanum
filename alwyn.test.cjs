@@ -633,6 +633,9 @@ test('Amnesia tracking saves across Alwyn’s ages, reloads, and imports', () =>
   const app = openApp({characters:[kid],activeId:kid.id});
   app.submit('alwyn-form', {});
   app.click('nav', {screen:'notes'});
+  assert.match(app.screen(), /Shared journal/);
+  assert.doesNotMatch(app.screen(), /Struggle · Amnesia/);
+  app.swipe({dx:-105, dy:8});
   assert.match(app.screen(), /Struggle · Amnesia/);
   assert.match(app.screen(), /Memories 0 \/ 5/);
   assert.match(app.screen(), /mark 1 XP and the GM advances a Threat/);
@@ -645,7 +648,80 @@ test('Amnesia tracking saves across Alwyn’s ages, reloads, and imports', () =>
   const state = app.state();
   const restored = openApp(state);
   restored.click('nav', {screen:'notes'});
+  restored.click('workspace-section', {section:'struggle'});
   assert.match(restored.screen(), /Shards used this session/);
   assert.equal(restored.normalizeImported(state.characters[0]).struggle.progress, 2);
+});
+
+test('reference pop-ups format move choices and show advancement picks by level', () => {
+  const app = openApp();
+  const dialog = () => app.element('modal-content').innerHTML;
+  app.click('reference-open', {id:'move-defy-danger'});
+  assert.match(dialog(), /<ul class="reference-list"><li>\+STR if you power through/);
+  assert.match(dialog(), /Partial success<\/h3>[\s\S]*?<li>The effort drains or rattles you/);
+  app.click('reference-open', {id:'move-comfort-or-support'});
+  assert.match(dialog(), /<li>Did you explore, change, or reaffirm/);
+  assert.match(dialog(), /<p>For each [“"]Yes/);
+  app.click('reference-open', {id:'class-wizard'});
+  assert.match(dialog(), /Level 5\+<\/h4>/);
+  assert.match(dialog(), /Gain a Path Move<\/span><span class="pill">8 picks/);
+  assert.match(dialog(), /Level 10\+<\/h4>/);
+  assert.match(dialog(), /Change your Class/);
+});
+
+test('shopping lives under GM and starter items share standard equipment filters', () => {
+  const app = openApp();
+  app.click('nav', {screen:'rules'});
+  app.click('rules-category', {category:'Equipment'});
+  assert.doesNotMatch(app.screen(), /<option value="Starting gear"/);
+  assert.doesNotMatch(app.screen(), /Treasure, Wealth and purchases/);
+  app.change('', {id:'rules-family', value:'Weapons'});
+  const results = () => app.element('rules-results').innerHTML;
+  assert.match(results(), /Ancestral longsword/);
+  assert.match(results(), /Razor dagger/);
+  assert.doesNotMatch(results(), /Bejeweled skull cap/);
+  app.change('', {id:'rules-family', value:'Armor'});
+  assert.match(results(), /Bejeweled skull cap/);
+  assert.match(results(), /Light armor/);
+  app.click('rules-category', {category:'GM'});
+  assert.match(app.screen(), /Treasure, Wealth and purchases/);
+});
+
+test('inventory refills limited items and shows all their keyword definitions', () => {
+  const app = openApp();
+  app.click('nav', {screen:'equipment'});
+  app.click('inventory-use', {id:'starter-potion'});
+  assert.match(app.screen(), /0\/1 uses/);
+  app.click('inventory-refill', {id:'starter-potion'});
+  assert.equal(app.state().characters[0].inventory.find(item => item.id === 'starter-potion').uses, 1);
+  app.click('reference-add-item', {id:'starting-razor-dagger'});
+  const dagger = app.state().characters[0].inventory.find(item => item.name === 'Razor dagger');
+  app.click('nav', {screen:'equipment'});
+  assert.match(app.screen(), /aria-label="Keywords for Razor dagger"/);
+  app.click('inventory-keywords', {id:dagger.id});
+  const dialog = app.element('modal-content').innerHTML;
+  assert.equal(app.element('modal-title').textContent, 'Razor dagger · Keywords');
+  for (const word of dagger.keywords) assert.ok(dialog.includes('<h3>' + word + '</h3>'), word);
+  assert.match(dialog, /ignores armor and shield protection/i);
+});
+
+test('mobile age selector changes Alwyn view and the journal renders only the selected tab', () => {
+  const app = openApp();
+  app.submit('alwyn-form', {});
+  const picker = app.element('mobile-age-picker');
+  assert.equal(picker.hidden, false);
+  assert.match(picker.innerHTML, /value="overview" selected/);
+  app.change('', {id:'mobile-age-picker', value:'sage'});
+  assert.equal(app.state().age, 'sage');
+  assert.match(picker.innerHTML, /value="sage" selected/);
+  app.click('nav', {screen:'notes'});
+  assert.match(app.screen(), /Shared campaign journal/);
+  assert.doesNotMatch(app.screen(), /No relationships yet/);
+  app.click('workspace-section', {section:'relationships'});
+  assert.match(app.screen(), /No relationships yet/);
+  assert.doesNotMatch(app.screen(), /Shared campaign journal/);
+  app.change('', {id:'mobile-age-picker', value:'overview'});
+  assert.match(picker.innerHTML, /value="overview" selected/);
+  assert.equal(app.element('page-title').textContent, 'Alwyn overview');
 });
 
